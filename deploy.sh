@@ -26,6 +26,15 @@ MSG=$(git log -1 --pretty=%s)
 # 이 파일(deploy.sh)도 저장소 최신으로 교체 (다음 실행부터 적용)
 cmp -s "$R/deploy.sh" "$X/deploy.sh" || cp "$R/deploy.sh" "$X/deploy.sh"
 
+# 홈페이지 추가 페이지: 저장소 site/ 폴더 -> /var/www/upmeta (새 파일 추가·변경만, 기존 파일 삭제 없음)
+W=/var/www/upmeta
+if [ -d "$R/site" ] && [ -d "$W" ]; then
+  while IFS= read -r f; do
+    cmp -s "site/$f" "$W/$f" && continue
+    mkdir -p "$W/$(dirname "$f")" && cp "site/$f" "$W/$f" && chmod 644 "$W/$f" && log "SITE $f ($MSG)"
+  done < <(cd site && find . -type f | sed 's#^\./##' | sort)
+fi
+
 changed=()
 while IFS= read -r f; do
   cmp -s "app/$f" "$D/$f" || changed+=("$f")
