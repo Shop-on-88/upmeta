@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UP META 포트폴리오</title>
+<meta name="description" content="메타 광고 집행부터 실시간 광고 뷰어, DB 관리 봇, 랜딩페이지, PG 결제 연동, 텔레그램 자동 홍보까지. UP META 작업 사례 모음.">
+<meta property="og:title" content="UP META 포트폴리오">
+<meta property="og:description" content="광고는 투명하게, 성과는 끝까지 UP. UP META 작업 사례 모음">
+<meta property="og:image" content="https://upmeta.online/img/og2.png">
+<link rel="icon" href="/img/logo-64.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#050c22; --bg2:#0a1736; --card:rgba(255,255,255,.055); --line:rgba(140,180,255,.24);
+    --ink:#fff; --muted:#a9bde6; --soft:#c9d7f5; --blue:#2f6bff; --sky:#6fa8ff;
+    --en:"Space Grotesk","Noto Sans KR",sans-serif;
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit;text-decoration:none} img{max-width:100%;display:block}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* 헤더 */
+  header{position:sticky;top:0;z-index:20;background:rgba(5,12,34,.82);backdrop-filter:blur(12px);border-bottom:1px solid rgba(140,180,255,.12)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
+  header .logo img{height:26px}
+  header nav{display:flex;gap:28px;font-weight:500;font-size:15px;color:var(--soft)}
+  header nav a:hover{color:#fff}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border-radius:999px;font-weight:700;font-size:15px;transition:transform .15s,box-shadow .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-blue{background:var(--blue);color:#fff;box-shadow:0 10px 26px rgba(47,107,255,.35)}
+  .btn-line{border:1px solid var(--line);background:var(--card)}
+
+  /* 히어로 */
+  .hero{position:relative;padding:110px 0 90px;overflow:hidden;
+    background:radial-gradient(60% 70% at 90% 0%,#1d4fd8 0%,transparent 60%),radial-gradient(50% 60% at 0% 100%,#0e2a7a 0%,transparent 65%),linear-gradient(160deg,#071434,#040a1f)}
+  .streak{position:absolute;height:4px;border-radius:4px;transform:rotate(-30deg);background:linear-gradient(90deg,transparent,#6aa2ff,#fff,transparent);opacity:.45;filter:blur(1px);pointer-events:none}
+  .eyebrow{font-family:var(--en);font-weight:700;letter-spacing:.32em;font-size:13px;color:var(--sky)}
+  .hero h1{font-size:clamp(38px,6vw,72px);line-height:1.18;font-weight:900;margin:18px 0 22px;letter-spacing:-.02em}
+  .hero h1 b,.sky{color:var(--sky)}
+  .hero p{font-size:clamp(16px,2vw,20px);color:var(--soft);max-width:640px;margin:0}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin:32px 0 36px}
+  .chips span{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:700}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero-logo{position:absolute;right:-40px;bottom:40px;width:560px;opacity:.08;pointer-events:none}
+
+  /* 섹션 */
+  section{padding:100px 0}
+  .sec-head{margin-bottom:44px}
+  .sec-head h2{font-size:clamp(30px,4.2vw,46px);line-height:1.25;font-weight:900;margin:12px 0 10px;letter-spacing:-.02em}
+  .sec-head p{color:var(--muted);margin:0;font-size:17px}
+
+  .svc{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .svc div{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px 14px 22px;text-align:center;transition:transform .2s,border-color .2s}
+  .svc div:hover{transform:translateY(-4px);border-color:rgba(140,180,255,.5)}
+  .svc img{width:72px;height:72px;object-fit:contain;margin:0 auto 12px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.4))}
+  .svc b{display:block;font-size:18px} .svc small{color:var(--muted);font-size:14px}
+
+  .edge{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+  .edge div{background:linear-gradient(160deg,rgba(40,90,220,.32),rgba(10,25,70,.6));border:1px solid rgba(140,180,255,.32);border-radius:24px;padding:28px}
+  .edge img{width:64px;height:64px;object-fit:contain;margin-bottom:10px}
+  .edge h3{margin:0 0 12px;font-size:22px;line-height:1.35} .edge h3 span{color:#8fbaff}
+  .edge li{color:var(--soft);font-size:15.5px;margin:6px 0;list-style:none;padding-left:28px;position:relative}
+  .edge li::before{content:"✓";position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:6px;background:var(--blue);font-size:12px;font-weight:900;line-height:20px;text-align:center;color:#fff}
+  .edge ul{margin:0;padding:0}
+
+  /* 작업 사례 */
+  .cases{background:linear-gradient(180deg,var(--bg),var(--bg2) 50%,var(--bg))}
+  .case{display:grid;grid-template-columns:1fr 1.25fr;gap:56px;align-items:center;padding:56px 0;border-top:1px solid rgba(140,180,255,.1)}
+  .case:first-of-type{border-top:0}
+  .case.rev .txt{order:2}
+  .case .no{font-family:var(--en);font-weight:700;font-size:15px;letter-spacing:.24em;color:var(--sky)}
+  .case h3{font-size:clamp(26px,3.2vw,36px);line-height:1.3;margin:10px 0 14px;font-weight:900}
+  .case p{color:var(--soft);margin:0 0 20px;font-size:16.5px}
+  .case ul{margin:0;padding:0;display:grid;gap:10px}
+  .case li{list-style:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:15px}
+  .case li b{display:block;font-size:16px;color:#fff} .case li span{color:var(--muted)}
+  .shot{position:relative}
+  .browser{border-radius:16px;overflow:hidden;background:#0d1426;border:1px solid rgba(140,180,255,.32);box-shadow:0 30px 60px rgba(0,0,0,.55);cursor:zoom-in}
+  .browser .bar{height:34px;background:#141c33;display:flex;align-items:center;gap:7px;padding:0 14px}
+  .browser .bar i{width:11px;height:11px;border-radius:50%}
+  .browser .bar em{margin-left:12px;flex:1;height:20px;border-radius:10px;background:#0a1122;font-style:normal;font-size:12px;line-height:20px;color:#7f93c0;padding-left:12px;overflow:hidden;white-space:nowrap}
+  .phone{width:250px;border-radius:36px;padding:10px;background:#0b0f1c;border:2px solid #2a3a66;box-shadow:0 30px 60px rgba(0,0,0,.6);cursor:zoom-in}
+  .phone .scr{border-radius:28px;overflow:hidden;height:500px}
+  .duo{display:flex;align-items:flex-end;gap:0}
+  .duo .browser{flex:1}
+  .duo .phone{width:190px;margin-left:-110px;margin-bottom:-30px}
+  .duo .phone .scr{height:380px}
+  .mall{display:flex;gap:26px;align-items:center}
+  .mall .feat{flex:1;display:grid;gap:12px}
+  .mall .feat div{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .mall .feat img{width:52px;height:52px;object-fit:contain}
+  .mall .feat b{display:block} .mall .feat small{color:var(--muted)}
+
+  /* 가이드 */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .steps div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+  .steps span{display:inline-block;width:40px;height:40px;border-radius:12px;background:var(--blue);font-family:var(--en);font-weight:700;font-size:19px;line-height:40px;text-align:center;margin-bottom:10px}
+  .steps b{display:block;font-size:17px} .steps small{color:var(--muted);font-size:14.5px}
+
+  /* 마지막 CTA */
+  .final{text-align:center;padding:120px 0;background:radial-gradient(60% 80% at 50% 100%,#1d4fd8 0%,transparent 70%),var(--bg)}
+  .final img{width:110px;margin:0 auto 26px}
+  .final h2{font-size:clamp(32px,5vw,56px);line-height:1.25;margin:0 0 14px;font-weight:900}
+  .final p{color:var(--soft);margin:0 0 34px;font-size:18px}
+  .final .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  footer{padding:28px 0;border-top:1px solid rgba(140,180,255,.12);color:#7f93c0;font-size:14px}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  /* 확대 보기 */
+  .lb{position:fixed;inset:0;background:rgba(2,6,18,.92);display:none;align-items:flex-start;justify-content:center;z-index:50;overflow:auto;padding:60px 16px;cursor:zoom-out}
+  .lb.on{display:flex} .lb img{max-width:min(1200px,100%);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+  .lb button{position:fixed;top:16px;right:16px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--bg2);color:#fff;font-size:22px;cursor:pointer}
+
+  .reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+  @media (max-width:900px){
+    header nav{display:none}
+    .svc{grid-template-columns:repeat(2,1fr)} .edge{grid-template-columns:1fr}
+    .case{grid-template-columns:1fr;gap:28px;padding:44px 0} .case.rev .txt{order:0}
+    .duo .phone{width:140px;margin-left:-80px} .duo .phone .scr{height:280px}
+    .mall{flex-direction:column} .phone{width:230px}
+    section{padding:72px 0} .hero{padding:80px 0 70px} .hero-logo{display:none}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="UP META 홈"><img src="/img/wordmark-dark.webp" alt="UP META"></a>
+    <nav><a href="#services">서비스</a><a href="#cases">작업 사례</a><a href="#guide">계정 세팅</a><a href="#contact">상담</a></nav>
+    <a class="btn btn-blue" href="https://t.me/upmeta9" target="_blank" rel="noopener">텔레그램 상담</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="streak" style="left:55%;top:60px;width:620px"></div>
+  <div class="streak" style="left:-8%;bottom:30px;width:520px"></div>
+  <img class="hero-logo" src="/img/wordmark-white.webp" alt="">
+  <div class="wrap">
+    <div class="eyebrow">UP META PORTFOLIO</div>
+    <h1>광고는 투명하게,<br>성과는 <b>끝까지 UP.</b></h1>
+    <p>메타 광고 집행부터 실시간 광고 뷰어, DB 관리 봇, 랜딩페이지, 결제 연동, 텔레그램 자동 홍보까지. 직접 만들고 운영 중인 작업들을 모았어요.</p>
+    <div class="chips"><span>메타광고 집행</span><span>실시간 광고 뷰어</span><span>DB 관리 봇</span><span>랜딩페이지</span><span>PG 결제 연동</span><span>자동 홍보</span><span>텔레그램 봇</span></div>
+    <div class="cta"><a class="btn btn-blue" href="#cases">작업 사례 보기</a><a class="btn btn-line" href="https://t.me/upmeta9" target="_blank" rel="noopener">무료 상담하기</a></div>
+  </div>
+</section>
+
+<section id="services">
+  <div class="wrap">
+    <div class="sec-head reveal"><div class="eyebrow">SERVICES</div><h2>필요한 건 <span class="sky">전부 한 곳에서.</span></h2><p>광고 집행에 필요한 도구까지 직접 만들어 드려요.</p></div>
+    <div class="svc reveal">
+      <div><img src="img/i20.webp" alt=""><b>메타광고 집행</b><small>인스타·페북·틱톡</small></div>
+      <div><img src="img/i07.webp" alt=""><b>광고대행</b><small>계정 세팅·운영</small></div>
+      <div><img src="img/iweb.webp" alt=""><b>실시간 뷰어</b><small>집행 내역 공개</small></div>
+      <div><img src="img/i19.webp" alt=""><b>랜딩페이지</b><small>맞춤 제작</small></div>
+      <div><img src="img/i15.webp" alt=""><b>솔루션 제작</b><small>업무 자동화</small></div>
+      <div><img src="img/icard.webp" alt=""><b>PG 결제 연동</b><small>국내·해외 PG</small></div>
+      <div><img src="img/i17.webp" alt=""><b>자동 홍보</b><small>홍보 프로그램</small></div>
+      <div><img src="img/i04.webp" alt=""><b>텔레그램</b><small>방어봇·봇 세팅</small></div>
+    </div>
+    <div class="edge reveal">
+      <div><img src="img/i06.webp" alt=""><h3>칼질 없는<br><span>100% 광고비 집행</span></h3><ul><li>거래처에 광고비 뷰어 제공</li><li>실제 집행 내역 실시간 확인</li><li>투명한 정산, 숨은 수수료 없음</li></ul></div>
+      <div><img src="img/i13.webp" alt=""><h3>UP META<br><span>프리미엄 오토봇</span></h3><ul><li>디비 정리 수기 없이 자동으로</li><li>원하는 직원 수·이름 등록</li><li>선톡·리딩 등 설정한 방식대로 저장</li></ul></div>
+      <div><img src="img/i00.webp" alt=""><h3>디비 자동 관리 &amp;<br><span>맞춤형 세팅</span></h3><ul><li>조건별 자동 블랙 (예: 00년생 이상, 성별)</li><li>오늘·날짜별·주별 디비 한눈에</li><li>직원별 디비 자동 분배</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="cases" class="cases">
+  <div class="wrap">
+    <div class="sec-head reveal"><div class="eyebrow">CASES</div><h2>직접 만들고 <span class="sky">운영 중인 작업들</span></h2><p>화면을 누르면 크게 볼 수 있어요. 고객 정보는 가렸습니다.</p></div>
+
+    <div class="case reveal">
+      <div class="txt"><div class="no">CASE 01</div><h3>고객용 실시간 광고 리포트</h3>
+        <p>링크 하나로 고객이 직접 확인하는 광고 성과 화면. 받은 신청, 광고비, 신청 1건당 비용을 숨김없이 공개해요.</p>
+        <ul><li><b>광고비 100% 공개</b><span>실제 지출과 신청 1건당 비용을 그대로</span></li><li><b>실시간 신청 현황</b><span>오늘·최근 7일·이번 달, 계정별 신청 수</span></li><li><b>보기 전용 링크</b><span>고객은 보기만, 설정 변경은 불가</span></li></ul></div>
+      <div class="shot"><div class="browser" data-zoom="img/viewer.webp"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><em>고객 광고 리포트 · 보기 전용</em></div><img src="img/viewer.webp" alt="고객용 광고 리포트 화면" loading="lazy"></div></div>
+    </div>
+
+    <div class="case rev reveal">
+      <div class="txt"><div class="no">CASE 02</div><h3>메타광고 통합 컨트롤러</h3>
+        <p>여러 고객사·여러 광고 계정을 한 화면에서 관리하는 대행사 전용 콘솔. 계정별 리드 단가를 비교하고 광고를 바로 켜고 끕니다.</p>
+        <ul><li><b>고객사 통합 관리</b><span>업체별 지출·리드·클릭률 한눈에</span></li><li><b>계정별 단가 비교</b><span>효율 좋은 계정에 예산 집중</span></li><li><b>원클릭 제어</b><span>광고 켜기·끄기, 고객 뷰어 링크 발급</span></li></ul></div>
+      <div class="shot"><div class="browser" data-zoom="img/admin.webp"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><em>UP META Ads Console</em></div><img src="img/admin.webp" alt="메타광고 통합 컨트롤러 화면" loading="lazy"></div></div>
+    </div>
+
+    <div class="case reveal">
+      <div class="txt"><div class="no">CASE 03</div><h3>전환을 부르는 랜딩페이지</h3>
+        <p>UP META 공식 홈페이지 upmeta.online. 기획·문구·디자인·개발까지 직접 했어요. PC와 모바일 모두 최적화하고 상담 버튼까지 바로 연결돼요.</p>
+        <ul><li><b>기획부터 개발까지</b><span>문구·디자인·코딩 전부 직접</span></li><li><b>모바일 최적화</b><span>광고 유입이 많은 모바일 기준</span></li><li><b>상담 바로 연결</b><span>텔레그램·카톡 버튼, 빠른 로딩</span></li></ul></div>
+      <div class="shot duo">
+        <div class="browser" data-zoom="img/landing.webp"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><em>upmeta.online</em></div><img src="img/landing.webp" alt="UP META 홈페이지 PC 화면" loading="lazy"></div>
+        <div class="phone" data-zoom="img/landing_m.webp"><div class="scr"><img src="img/landing_m.webp" alt="UP META 홈페이지 모바일 화면" loading="lazy"></div></div>
+      </div>
+    </div>
+
+    <div class="case rev reveal">
+      <div class="txt"><div class="no">CASE 04</div><h3>공동구매 쇼핑몰 &amp; PG 결제 연동</h3>
+        <p>해외 직구 공동구매 쇼핑몰 제작 사례. 상품 진열부터 옵션 선택, 카드 결제(PG)까지 페이지 안에서 바로 결제돼요.</p>
+        <ul><li><b>국내·해외 PG 결제</b><span>페이지 안 결제 버튼, 카드 결제 연동</span></li><li><b>쇼핑몰 전체 제작</b><span>메인 배너·카테고리·상품 상세·후기</span></li><li><b>세일가·옵션 관리</b><span>할인율 표시, 구성상품·옵션 선택</span></li></ul></div>
+      <div class="shot mall">
+        <div class="phone" data-zoom="img/mall.webp"><div class="scr"><img src="img/mall.webp" alt="공동구매 쇼핑몰 화면" loading="lazy"></div></div>
+        <div class="feat">
+          <div><img src="img/icard.webp" alt=""><span><b>카드 결제</b><small>국내·해외 PG 연동</small></span></div>
+          <div><img src="img/i09.webp" alt=""><span><b>세일가 자동 표시</b><small>할인율·정가 비교</small></span></div>
+          <div><img src="img/i16.webp" alt=""><span><b>1:1 상담 연결</b><small>카톡·텔레그램 문의</small></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case reveal">
+      <div class="txt"><div class="no">CASE 05</div><h3>텔레그램 자동 홍보 프로그램</h3>
+        <p>여러 계정으로 홍보방 가입부터 홍보글 전송까지 자동으로. 계정별 가입한 방, 전송 현황, 기록을 실시간으로 확인해요.</p>
+        <ul><li><b>다계정 자동 운영</b><span>계정마다 다른 홍보글·스케줄</span></li><li><b>방 자동 가입</b><span>홍보방 250개+ 자동 가입·관리</span></li><li><b>실시간 기록</b><span>오늘·누적 전송, 실패 원인까지</span></li></ul></div>
+      <div class="shot"><div class="browser" data-zoom="img/promo.webp"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><em>UP META 자동 홍보 어드민</em></div><img src="img/promo.webp" alt="자동 홍보 어드민 화면" loading="lazy" style="max-height:520px;width:100%;object-fit:cover;object-position:top"></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="guide">
+  <div class="wrap">
+    <div class="sec-head reveal"><div class="eyebrow">CASE 06 · ACCOUNT SETUP</div><h2>메타 광고계정 <span class="sky">세팅 &amp; 수급</span></h2><p>정지 걱정 없이 시작하도록 계정 세팅을 7단계로 챙겨 드려요. 계정이 없으면 무제한 계정 수급과 A/S까지 책임집니다.</p></div>
+    <div class="steps reveal">
+      <div><span>1</span><b>비즈니스 포트폴리오</b><small>광고 자산을 담는 회사 단위 그릇</small></div>
+      <div><span>2</span><b>페이지·인스타 연결</b><small>광고가 나갈 페이지와 인스타 계정</small></div>
+      <div><span>3</span><b>광고 계정 생성</b><small>통화·시간대는 만든 뒤 변경 불가</small></div>
+      <div><span>4</span><b>결제 수단·한도</b><small>백업 카드, 일일 한도로 정지 예방</small></div>
+      <div><span>5</span><b>권한 설정</b><small>대행사에는 파트너 권한만</small></div>
+      <div><span>6</span><b>픽셀·도메인</b><small>전환 데이터 수집과 도메인 인증</small></div>
+      <div><span>7</span><b>보안·인증</b><small>2단계 인증, 비즈니스 인증</small></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="final">
+  <div class="wrap">
+    <img src="img/i20.webp" alt="">
+    <h2>당신의 광고,<br><span class="sky">한 단계 UP</span> 할 차례.</h2>
+    <p>텔레그램으로 편하게 물어보세요. 상담은 무료예요.</p>
+    <div class="row">
+      <a class="btn btn-blue" href="https://t.me/upmeta9" target="_blank" rel="noopener">텔레그램 상담 @upmeta9</a>
+      <a class="btn btn-line" href="https://t.me/UPMETA99" target="_blank" rel="noopener">공지 채널 보기</a>
+      <a class="btn btn-line" href="/">홈페이지</a>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap"><span>© UP META</span><span>텔레그램 상담 @upmeta9 · 공지 t.me/UPMETA99</span></div></footer>
+
+<div class="lb" id="lb" role="dialog" aria-label="화면 크게 보기"><button type="button" aria-label="닫기">×</button><img alt=""></div>
+<script>
+  // 화면 크게 보기
+  var lb=document.getElementById('lb'), lbImg=lb.querySelector('img');
+  document.querySelectorAll('[data-zoom]').forEach(function(el){
+    el.addEventListener('click',function(){lbImg.src=el.getAttribute('data-zoom');lb.classList.add('on');});
+  });
+  lb.addEventListener('click',function(){lb.classList.remove('on');});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')lb.classList.remove('on');});
+  // 스크롤 등장 효과
+  var io='IntersectionObserver' in window ? new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12}) : null;
+  document.querySelectorAll('.reveal').forEach(function(el){io?io.observe(el):el.classList.add('in');});
+</script>
+</body>
+</html>
