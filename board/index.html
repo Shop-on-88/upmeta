@@ -72,6 +72,7 @@ textarea{min-height:76px;resize:vertical}
 .calg button:hover{background:var(--card2)}.calg .sun{color:#ff7b7b}.calg .sat{color:#6aa5ff}
 .calg .tod{border:1px solid var(--ac)}.calg .sel{background:var(--ac);color:#fff;font-weight:700}
 .calf{display:flex;gap:8px;margin-top:8px}.calf button{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);font-size:13px;color:var(--tx)}
+.cat{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;color:#cfd5e1;background:var(--card2);border:1px solid var(--line)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:99px;font-size:13px;font-weight:600;z-index:20}
 </style>
 </head>
@@ -81,6 +82,7 @@ textarea{min-height:76px;resize:vertical}
 const ST={new:'미확인',ack:'확인',doing:'진행 중',hold:'보류',stop:'중지',done:'완료'};
 const NEED={hold:'보류 사유',stop:'중지 사유',done:'완료 내용 (어떻게 완료했는지)'};
 const PR={high:'긴급',normal:'보통',low:'낮음'};
+const CATS=['광고관련','계정관련','결제관련','홈페이지관련','기타'];let cat='all';
 const RL={admin:'관리자',lead:'팀장',staff:'직원'};
 const JOIN=new URLSearchParams(location.search).get('join')||'';
 let S=null,filter='open',who='all',modal=null,es=null,live=false;
@@ -150,6 +152,7 @@ function boardView(){
   let list=T.filter(t=>filter==='all'?true:filter==='open'?!['done','stop'].includes(t.status):t.status===filter);
   if(who==='me')list=list.filter(t=>t.assignee_id===S.me.id);
   else if(who!=='all')list=list.filter(t=>t.assignee_id===who);
+  if(cat!=='all')list=list.filter(t=>(t.category||'기타')===cat);
   const rank={new:0,ack:1,doing:2,hold:3,stop:4,done:5},pr={high:0,normal:1,low:2};
   list.sort((a,b)=>rank[a.status]-rank[b.status]||pr[a.priority]-pr[b.priority]||(a.due||'9').localeCompare(b.due||'9')||b.updated-a.updated);
   const td=today();
@@ -162,10 +165,12 @@ function boardView(){
   <span style="width:1px;background:var(--line);margin:4px 2px"></span>
   <button class="chip ${who==='all'?'on':''}" onclick="setW('all')">모든 담당자</button>
   <button class="chip ${who==='me'?'on':''}" onclick="setW('me')">내 업무</button>
-  ${staff().filter(u=>u.id!==S.me.id).map(u=>`<button class="chip ${who===u.id?'on':''}" onclick="setW(${u.id})">${esc(u.name)}</button>`).join('')}</div></header>
+  ${staff().filter(u=>u.id!==S.me.id).map(u=>`<button class="chip ${who===u.id?'on':''}" onclick="setW(${u.id})">${esc(u.name)}</button>`).join('')}</div>
+  <div class="filters" style="margin-top:6px"><button class="chip ${cat==='all'?'on':''}" onclick="setC('all')">모든 분류</button>
+  ${CATS.map(k=>`<button class="chip ${cat===k?'on':''}" onclick="setC('${k}')">${k} ${T.filter(t=>(t.category||'기타')===k&&!['done','stop'].includes(t.status)).length||''}</button>`).join('')}</div></header>
   ${list.length?list.map(t=>{const last=t.logs.find(l=>l.kind==='note');const late=t.due&&t.due<td&&!['done','stop'].includes(t.status);
     return `<div class="task" style="--c:var(--${t.status})" onclick="openTask(${t.id})">
-    <div class="row"><span class="badge">${ST[t.status]}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}
+    <div class="row"><span class="badge">${ST[t.status]}</span><span class="cat">${esc(t.category||'기타')}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}
     <span class="tag">👤 ${esc(uname(t.assignee_id))}</span>${t.due?`<span class="tag ${late?'late':''}">📅 ${t.due.slice(5).replace('-','/')}${late?' 기한 지남':''}</span>`:''}
     <span class="sp"></span><span class="tag">${fmt(t.updated)}</span></div>
     <div class="ttl">${esc(t.title)}</div>
@@ -175,6 +180,7 @@ function boardView(){
 }
 function setF(f){filter=filter===f&&f!=='open'&&f!=='all'?'open':f;render()}
 function setW(w){who=w;render()}
+function setC(c){cat=c;render()}
 function closeModal(){modal=null;$('#mod').innerHTML=''}
 function showModal(){
   const m=$('#mod');let h='';
@@ -203,9 +209,10 @@ function calDraw(){const [y,m]=calYM,first=new Date(y,m,1).getDay(),days=new Dat
 function openTask(id){modal={type:'task',id,pick:null};showModal()}
 function openMenu(){modal={type:'menu'};showModal()}
 function formView(){
-  const t=modal.type==='edit'?S.tasks.find(x=>x.id===modal.id):{priority:'normal',assignee_id:null};
+  const t=modal.type==='edit'?S.tasks.find(x=>x.id===modal.id):{priority:'normal',assignee_id:null,category:''};
   return `<h2>${modal.type==='edit'?'업무 수정':'업무 지시 등록'}<button class="x" onclick="closeModal()">×</button></h2>
   <form onsubmit="saveTask(event)"><label>업무 제목</label><input id="ft" required maxlength="200" value="${esc(t.title)}">
+  <label>업무 분류</label><select id="fc" required><option value="" disabled ${t.category?'':'selected'}>분류 선택</option>${CATS.map(k=>`<option ${k===(t.category||'')?'selected':''}>${k}</option>`).join('')}</select>
   <label>상세 내용</label><textarea id="fd" placeholder="무엇을, 어떻게, 언제까지">${esc(t.detail)}</textarea>
   <div class="g2"><div><label>담당자</label><select id="fa"><option value="">미지정</option>${staff().map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
   <div><label>중요도</label><select id="fp">${Object.keys(PR).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PR[k]}</option>`).join('')}</select></div></div>
@@ -215,7 +222,7 @@ function formView(){
 }
 async function saveTask(e){
   e.preventDefault();
-  const d={title:$('#ft').value,detail:$('#fd').value,assignee_id:$('#fa').value?+$('#fa').value:null,priority:$('#fp').value,due:$('#fdue').value};
+  const d={category:$('#fc').value,title:$('#ft').value,detail:$('#fd').value,assignee_id:$('#fa').value?+$('#fa').value:null,priority:$('#fp').value,due:$('#fdue').value};
   try{
     if(modal.type==='edit'){const id=modal.id;await api('/api/tasks/'+id,d);modal={type:'task',id,pick:null};await load();showModal()}
     else{await api('/api/tasks',d);closeModal();toast('지시가 등록되었습니다');load()}
@@ -224,7 +231,7 @@ async function saveTask(e){
 function taskView(){
   const t=S.tasks.find(x=>x.id===modal.id);if(!t)return'';
   const canDel=S.me.role!=='staff'||t.creator_id===S.me.id,p=modal.pick;
-  return `<h2><span class="badge" style="--c:var(--${t.status})">${ST[t.status]}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}<button class="x" onclick="closeModal()">×</button></h2>
+  return `<h2><span class="badge" style="--c:var(--${t.status})">${ST[t.status]}</span><span class="cat">${esc(t.category||'기타')}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}<button class="x" onclick="closeModal()">×</button></h2>
   <div class="ttl" style="font-size:19px;margin-top:0">${esc(t.title)}</div>
   <div class="row"><span class="tag">👤 담당 ${esc(uname(t.assignee_id))}</span><span class="tag">✍️ 지시 ${esc(uname(t.creator_id))}</span>${t.due?`<span class="tag">📅 ${t.due}</span>`:''}</div>
   ${t.detail?`<div class="detail">${esc(t.detail)}</div>`:''}

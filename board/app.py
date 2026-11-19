@@ -39,6 +39,7 @@ NEED_NOTE = {"hold": "보류 사유", "stop": "중지 사유", "done": "완료 �
 PRIORITY = {"high": "긴급", "normal": "보통", "low": "낮음"}
 ROLES = {"admin": "관리자", "lead": "팀장", "staff": "직원"}
 INVITE_DAYS = 7
+CATS = ["광고관련", "계정관련", "결제관련", "홈페이지관련", "기타"]
 
 lock = threading.Lock()
 listeners = set()
@@ -65,6 +66,8 @@ def init_db():
           REFERENCES tasks(id) ON DELETE CASCADE, user_id INTEGER, kind TEXT, text TEXT, created REAL);
         CREATE TABLE IF NOT EXISTS invites(token TEXT PRIMARY KEY, role TEXT NOT NULL, created REAL, expires REAL);
         """)
+        if "category" not in [r["name"] for r in c.execute("PRAGMA table_info(tasks)")]:
+            c.execute("ALTER TABLE tasks ADD COLUMN category TEXT DEFAULT '기타'")
 
 
 def new_invite(c, role):
@@ -140,7 +143,7 @@ def digest_loop():
                     lines = ["📋 오늘의 미완료 업무 (%d건)" % len(rows)]
                     for r in rows:
                         late = " ⚠️기한 지남" if r["due"] and r["due"] < today else ""
-                        lines.append("• [%s] %s — %s%s%s" % (STATUS[r["status"]], r["title"], uname(c, r["assignee_id"]),
+                        lines.append("• [%s·%s] %s — %s%s%s" % (STATUS[r["status"]], r["category"] or "기타", r["title"], uname(c, r["assignee_id"]),
                                                              (" (~%s)" % r["due"]) if r["due"] else "", late))
                     notify("\n".join(lines))
         time.sleep(30)
@@ -375,13 +378,14 @@ class H(BaseHTTPRequestHandler):
             aid = self.valid_user(c, d.get("assignee_id"))
             pr = d.get("priority") if d.get("priority") in PRIORITY else "normal"
             due = d.get("due") if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(d.get("due") or "")) else ""
-            cur = c.execute("INSERT INTO tasks(title,detail,assignee_id,creator_id,priority,due,created,updated) "
-                            "VALUES(?,?,?,?,?,?,?,?)",
-                            (title, str(d.get("detail", ""))[:4000], aid, me["id"], pr, due, now, now))
+            cat = d.get("category") if d.get("category") in CATS else "기타"
+            cur = c.execute("INSERT INTO tasks(title,detail,assignee_id,creator_id,priority,due,category,created,updated) "
+                            "VALUES(?,?,?,?,?,?,?,?,?)",
+                            (title, str(d.get("detail", ""))[:4000], aid, me["id"], pr, due, cat, now, now))
             c.execute("INSERT INTO logs(task_id,user_id,kind,text,created) VALUES(?,?,?,?,?)",
                       (cur.lastrowid, me["id"], "create", "업무 등록", now))
-            notify("🆕 새 업무 지시%s\n「%s」\n담당: %s · 지시: %s%s%s" % (
-                " 🔥긴급" if pr == "high" else "", title, uname(c, aid), me["name"],
+            notify("🆕 새 업무 지시%s\n[%s]「%s」\n담당: %s · 지시: %s%s%s" % (
+                " 🔥긴급" if pr == "high" else "", cat, title, uname(c, aid), me["name"],
                 ("\n기한: " + due) if due else "",
                 ("\n\n" + str(d.get("detail", ""))[:500]) if d.get("detail") else ""))
             broadcast()
@@ -432,6 +436,8 @@ class H(BaseHTTPRequestHandler):
             if "assignee_id" in d and self.valid_user(c, d["assignee_id"]) != t["assignee_id"]:
                 aid = self.valid_user(c, d["assignee_id"])
                 sets.append("assignee_id=?"); vals.append(aid); changes.append("담당자 → " + uname(c, aid))
+            if "category" in d and d["category"] in CATS and d["category"] != t["category"]:
+                sets.append("category=?"); vals.append(d["category"]); changes.append("분류 → " + d["category"])
             if "priority" in d and d["priority"] in PRIORITY and d["priority"] != t["priority"]:
                 sets.append("priority=?"); vals.append(d["priority"]); changes.append("중요도 → " + PRIORITY[d["priority"]])
             if "due" in d and (d["due"] or "") != t["due"] and re.fullmatch(r"(\d{4}-\d{2}-\d{2})?", str(d["due"] or "")):
