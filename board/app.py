@@ -7,10 +7,10 @@
   BOT_TOKEN       텔레그램 봇 토큰 (없으면 알림 끔)
   TG_CHAT_ID      알림 받을 그룹 ID (없으면 같은 폴더의 chat_id 파일을 읽음)
   BOARD_URL       알림에 넣을 보드 주소 (선택)
-  DIGEST_HOUR     매일 미완료 업무 요약을 보내는 시각(0~23, 한국 시간). 기본 9, 끄려면 -1
+  DIGEST_HOUR     매일 현황판을 새 글로 올리는 시각(0~23, 한국 시간). 기본 9, 끄려면 -1
 """
 import hashlib, hmac, json, os, queue, re, secrets, sqlite3, threading, time
-import urllib.parse, urllib.request
+import urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -103,7 +103,107 @@ def notify(text):
     threading.Thread(target=send, daemon=True).start()
 
 
+status_dirty = threading.Event()
+STATUS_FILE = os.path.join(BASE, "status_msg")
+
+
+def tg_call(method, **params):
+    data = urllib.parse.urlencode(params).encode()
+    try:
+        with urllib.request.urlopen("https://api.telegram.org/bot%s/%s" % (TG_TOKEN, method), data, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read())
+        except Exception:
+            return {"ok": False, "description": str(e)}
+    except Exception as e:
+        return {"ok": False, "description": str(e)}
+
+
+def status_text():
+    """그룹방에 띄워 두는 현황판 글"""
+    now = datetime.now(KST)
+    today = now.strftime("%Y-%m-%d")
+    day0 = datetime(now.year, now.month, now.day, tzinfo=KST).timestamp()
+    with db() as c:
+        rows = c.execute("SELECT * FROM tasks ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, "
+                         "CASE due WHEN '' THEN '9' ELSE due END, updated DESC").fetchall()
+        names = {r["id"]: r["name"] for r in c.execute("SELECT id,name FROM users")}
+    cnt = {k: sum(1 for r in rows if r["status"] == k) for k in STATUS}
+    done_today = [r for r in rows if r["status"] == "done" and r["updated"] >= day0]
+    out = ["📊 UP META 업무 현황판", "%d/%d %02d:%02d 기준 · 자동 갱신" % (now.month, now.day, now.hour, now.minute), "",
+           "🔴 미확인 %d  👀 확인 %d  ▶️ 진행 중 %d" % (cnt["new"], cnt["ack"], cnt["doing"]),
+           "⏸ 보류 %d  ⛔ 중지 %d  ✅ 오늘 완료 %d" % (cnt["hold"], cnt["stop"], len(done_today))]
+    icons = [("new", "🔴 미확인"), ("ack", "👀 확인"), ("doing", "▶️ 진행 중"), ("hold", "⏸ 보류")]
+    for k, title in icons:
+        items = [r for r in rows if r["status"] == k]
+        if not items:
+            continue
+        out += ["", "%s (%d)" % (title, len(items))]
+        for r in items[:12]:
+            line = "• %s[%s] %s — %s" % ("🔥" if r["priority"] == "high" else "", r["category"] or "기타",
+                                         r["title"][:60], names.get(r["assignee_id"], "미지정"))
+            if r["due"]:
+                line += " (~%s)%s" % (r["due"][5:].replace("-", "/"), " ⚠️기한 지남" if r["due"] < today else "")
+            out.append(line)
+            if k == "hold" and r["status_note"]:
+                out.append("   └ 사유: " + r["status_note"][:80])
+        if len(items) > 12:
+            out.append("   … 외 %d건" % (len(items) - 12))
+    if done_today:
+        out += ["", "✅ 오늘 완료 (%d)" % len(done_today)]
+        out += ["• [%s] %s — %s" % (r["category"] or "기타", r["title"][:60], names.get(r["assignee_id"], "미지정"))
+                for r in done_today[:8]]
+    if not any(cnt[k] for k in ("new", "ack", "doing", "hold")) and not done_today:
+        out += ["", "진행 중인 업무가 없습니다."]
+    if BOARD_URL:
+        out += ["", BOARD_URL]
+    return "\n".join(out)[:4000]
+
+
+def status_update(fresh=False):
+    """현황판 글을 고쳐 씀. fresh=True 이거나 고칠 글이 없으면 새로 올림"""
+    chat = tg_chat()
+    if not (TG_TOKEN and chat):
+        return
+    text = status_text()
+    try:
+        with open(STATUS_FILE) as f:
+            st = json.load(f)
+    except Exception:
+        st = {}
+    if st.get("chat") == chat and st.get("id"):
+        if not fresh:
+            r = tg_call("editMessageText", chat_id=chat, message_id=st["id"], text=text, disable_web_page_preview="true")
+            if r.get("ok") or "not modified" in str(r.get("description", "")):
+                return
+            if "not found" not in str(r.get("description", "")) and "can't be edited" not in str(r.get("description", "")):
+                print("status edit error:", r.get("description"), flush=True)
+                return  # 일시적인 오류: 다음 변경 때 다시 시도
+        else:
+            tg_call("deleteMessage", chat_id=chat, message_id=st["id"])
+    r = tg_call("sendMessage", chat_id=chat, text=text, disable_web_page_preview="true", disable_notification="true")
+    if r.get("ok"):
+        with open(STATUS_FILE, "w") as f:
+            json.dump({"chat": chat, "id": r["result"]["message_id"]}, f)
+    else:
+        print("status send error:", r.get("description"), flush=True)
+
+
+def status_loop():
+    while True:
+        status_dirty.wait()
+        time.sleep(3)  # 연달아 바뀌면 한 번만 고침
+        status_dirty.clear()
+        try:
+            status_update()
+        except Exception as e:
+            print("status error:", e, flush=True)
+
+
 def broadcast():
+    status_dirty.set()
     for q in list(listeners):
         try:
             q.put_nowait("change")
@@ -136,16 +236,10 @@ def digest_loop():
         if DIGEST_HOUR >= 0 and now.hour == DIGEST_HOUR and last != now.date():
             last = now.date()
             backup(now)
-            with db() as c:
-                rows = c.execute("SELECT * FROM tasks WHERE status NOT IN ('done','stop') ORDER BY assignee_id, due").fetchall()
-                if rows:
-                    today = now.strftime("%Y-%m-%d")
-                    lines = ["📋 오늘의 미완료 업무 (%d건)" % len(rows)]
-                    for r in rows:
-                        late = " ⚠️기한 지남" if r["due"] and r["due"] < today else ""
-                        lines.append("• [%s·%s] %s — %s%s%s" % (STATUS[r["status"]], r["category"] or "기타", r["title"], uname(c, r["assignee_id"]),
-                                                             (" (~%s)" % r["due"]) if r["due"] else "", late))
-                    notify("\n".join(lines))
+            try:
+                status_update(fresh=True)  # 매일 아침 현황판을 새 글로 올려 대화 맨 아래로
+            except Exception as e:
+                print("status error:", e, flush=True)
         time.sleep(30)
 
 
@@ -497,6 +591,8 @@ if __name__ == "__main__":
             os.chmod(os.path.join(BASE, "invite_links"), 0o600)
             open(flag, "w").close()
     threading.Thread(target=digest_loop, daemon=True).start()
+    threading.Thread(target=status_loop, daemon=True).start()
+    status_dirty.set()
     srv = ThreadingHTTPServer(("127.0.0.1" if os.environ.get("LOCAL_ONLY", "1") == "1" else "0.0.0.0", PORT), H)
     srv.daemon_threads = True
     print("taskboard on :%d" % PORT, flush=True)
