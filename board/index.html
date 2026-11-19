@@ -63,6 +63,15 @@ textarea{min-height:76px;resize:vertical}
 .login h1{font-size:26px;margin:0 0 4px}.login p{color:var(--mu);margin:0 0 20px}
 .urow{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
 .urow button{white-space:nowrap;font-size:13px;color:var(--mu);border:1px solid var(--line);border-radius:8px;padding:4px 9px}
+.due{width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--mu)}
+.due.set{color:var(--tx)}
+#cal{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px}
+.calh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.calh button{font-size:22px;width:44px;height:36px;color:var(--tx)}
+.calg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+.calg span{font-size:12px;color:var(--mu);padding:4px 0}.calg button{height:40px;border-radius:9px;font-size:14px}
+.calg button:hover{background:var(--card2)}.calg .sun{color:#ff7b7b}.calg .sat{color:#6aa5ff}
+.calg .tod{border:1px solid var(--ac)}.calg .sel{background:var(--ac);color:#fff;font-weight:700}
+.calf{display:flex;gap:8px;margin-top:8px}.calf button{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);font-size:13px;color:var(--tx)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:99px;font-size:13px;font-weight:600;z-index:20}
 </style>
 </head>
@@ -173,8 +182,24 @@ function showModal(){
   else if(modal.type==='task')h=taskView();
   else if(modal.type==='menu')h=menuView();
   m.innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="sheet">${h}</div></div>`;
+  dueLabel();
 }
 function openNew(){modal={type:'new'};showModal();$('#ft').focus()}
+const WD=['일','월','화','수','목','금','토'];let calYM=null;
+function dueLabel(){const b=$('#dueb');if(!b)return;const v=$('#fdue').value;
+  if(v){const d=new Date(v+'T00:00:00');b.innerHTML='📅 '+d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+WD[d.getDay()]+')';b.classList.add('set')}
+  else{b.innerHTML='📅 날짜 선택 (기한 없음)';b.classList.remove('set')}}
+function calToggle(){const c=$('#cal');if(!c.hidden){c.hidden=true;return}
+  const v=$('#fdue').value||today();calYM=[+v.slice(0,4),+v.slice(5,7)-1];c.hidden=false;calDraw()}
+function calMove(n){const d=new Date(calYM[0],calYM[1]+n,1);calYM=[d.getFullYear(),d.getMonth()];calDraw()}
+function calPick(v){$('#fdue').value=v;$('#cal').hidden=true;dueLabel()}
+function calDraw(){const [y,m]=calYM,first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),sel=$('#fdue').value,td=today();
+  let h=`<div class="calh"><button type="button" onclick="calMove(-1)">‹</button><b>${y}년 ${m+1}월</b><button type="button" onclick="calMove(1)">›</button></div><div class="calg">`
+   +WD.map((w,i)=>`<span class="${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('')+'<i></i>'.repeat(first);
+  for(let d=1;d<=days;d++){const v=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),w=(first+d-1)%7;
+    h+=`<button type="button" class="${v===sel?'sel ':''}${v===td?'tod ':''}${w===0?'sun':w===6?'sat':''}" onclick="calPick('${v}')">${d}</button>`}
+  h+=`</div><div class="calf"><button type="button" onclick="calPick('${td}')">오늘</button><button type="button" onclick="calPick('')">기한 없음</button></div>`;
+  $('#cal').innerHTML=h}
 function openTask(id){modal={type:'task',id,pick:null};showModal()}
 function openMenu(){modal={type:'menu'};showModal()}
 function formView(){
@@ -184,7 +209,8 @@ function formView(){
   <label>상세 내용</label><textarea id="fd" placeholder="무엇을, 어떻게, 언제까지">${esc(t.detail)}</textarea>
   <div class="g2"><div><label>담당자</label><select id="fa"><option value="">미지정</option>${staff().map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
   <div><label>중요도</label><select id="fp">${Object.keys(PR).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PR[k]}</option>`).join('')}</select></div></div>
-  <label>기한</label><input id="fdue" type="date" value="${esc(t.due)}">
+  <label>기한</label><input id="fdue" type="hidden" value="${esc(t.due)}">
+  <button type="button" class="due" id="dueb" onclick="calToggle()"></button><div id="cal" hidden></div>
   <button class="btn">${modal.type==='edit'?'수정 저장':'지시 등록'}</button><div class="msg" id="fm"></div></form>`;
 }
 async function saveTask(e){
