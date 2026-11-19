@@ -37,6 +37,8 @@ DIGEST_HOUR = int(os.environ.get("DIGEST_HOUR", "9"))
 STATUS = {"new": "미확인", "ack": "확인", "doing": "진행 중", "hold": "보류", "stop": "중지", "done": "완료"}
 NEED_NOTE = {"hold": "보류 사유", "stop": "중지 사유", "done": "완료 내용"}
 PRIORITY = {"high": "긴급", "normal": "보통", "low": "낮음"}
+ROLES = {"admin": "관리자", "lead": "팀장", "staff": "직원"}
+INVITE_DAYS = 7
 
 lock = threading.Lock()
 listeners = set()
@@ -61,7 +63,20 @@ def init_db():
           status TEXT DEFAULT 'new', status_note TEXT DEFAULT '', created REAL, updated REAL);
         CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL
           REFERENCES tasks(id) ON DELETE CASCADE, user_id INTEGER, kind TEXT, text TEXT, created REAL);
+        CREATE TABLE IF NOT EXISTS invites(token TEXT PRIMARY KEY, role TEXT NOT NULL, created REAL, expires REAL);
         """)
+
+
+def new_invite(c, role):
+    tok = secrets.token_urlsafe(18)
+    now = time.time()
+    c.execute("INSERT INTO invites VALUES(?,?,?,?)", (tok, role, now, now + INVITE_DAYS * 86400))
+    return tok
+
+
+def get_invite(c, tok):
+    c.execute("DELETE FROM invites WHERE expires<?", (time.time(),))
+    return c.execute("SELECT * FROM invites WHERE token=?", (str(tok or ""),)).fetchone()
 
 
 def hash_pin(pin, salt):
@@ -179,7 +194,7 @@ class H(BaseHTTPRequestHandler):
 
     # ---- GET
     def do_GET(self):
-        path = self.path.split("?")[0]
+        path, _, qs = self.path.partition("?")
         if path in ("/", "/index.html"):
             with open(os.path.join(BASE, "index.html"), "rb") as f:
                 body = f.read()
@@ -194,7 +209,9 @@ class H(BaseHTTPRequestHandler):
                 me = self.me(c)
                 if not me:
                     n = c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
-                    return self.send_json({"me": None, "setup": n == 0})
+                    inv = get_invite(c, urllib.parse.parse_qs(qs).get("join", [""])[0])
+                    return self.send_json({"me": None, "setup": n == 0,
+                                           "join": {"role": inv["role"]} if inv else None})
                 users = [dict(r) for r in c.execute("SELECT id,name,role,active FROM users ORDER BY role, name")]
                 tasks = [dict(r) for r in c.execute("SELECT * FROM tasks ORDER BY updated DESC")]
                 logs = {}
@@ -202,8 +219,11 @@ class H(BaseHTTPRequestHandler):
                     logs.setdefault(r["task_id"], []).append(dict(r))
                 for t in tasks:
                     t["logs"] = logs.get(t["id"], [])
-                self.send_json({"me": {"id": me["id"], "name": me["name"], "role": me["role"]},
-                                "users": users, "tasks": tasks})
+                out = {"me": {"id": me["id"], "name": me["name"], "role": me["role"]}, "users": users, "tasks": tasks}
+                if me["role"] == "admin":
+                    c.execute("DELETE FROM invites WHERE expires<?", (time.time(),))
+                    out["invites"] = [dict(r) for r in c.execute("SELECT * FROM invites ORDER BY created")]
+                self.send_json(out)
         elif path == "/api/events":
             with db() as c:
                 if not self.me(c):
@@ -267,6 +287,22 @@ class H(BaseHTTPRequestHandler):
                 return self.err("설정 코드가 맞지 않습니다", 403)
             os.remove(SETUP_FILE)
             return self.make_user(c, d, "admin", login=True)
+        if path == "/api/join":
+            ip = self.ip()
+            cnt, until = fails.get(ip, (0, 0))
+            if now < until:
+                return self.err("잠시 후 다시 시도해 주세요 (%d초)" % int(until - now), 429)
+            inv = get_invite(c, d.get("token"))
+            if not inv:
+                fails[ip] = (cnt + 1, now + 300 if (cnt + 1) % 5 == 0 else 0)
+                return self.err("가입 링크가 만료되었거나 잘못되었습니다. 관리자에게 새 링크를 받아 주세요", 403)
+            if self.make_user(c, d, inv["role"], login=True):
+                if inv["role"] == "admin":  # 관리자 링크는 한 번만 사용
+                    c.execute("DELETE FROM invites WHERE token=?", (inv["token"],))
+                if os.path.exists(SETUP_FILE):
+                    os.remove(SETUP_FILE)
+                notify("👋 %s님이 업무 보드에 가입했습니다 (%s)" % (str(d.get("name", "")).strip()[:30], ROLES[inv["role"]]))
+            return
         if path == "/api/login":
             ip = self.ip()
             cnt, until = fails.get(ip, (0, 0))
@@ -286,15 +322,28 @@ class H(BaseHTTPRequestHandler):
         if not me:
             return self.err("로그인이 필요합니다", 401)
         admin = me["role"] == "admin"
+        boss = me["role"] in ("admin", "lead")
 
         if path == "/api/logout":
             c.execute("DELETE FROM sessions WHERE user_id=?", (me["id"],))
             return self.send_json({"ok": True}, headers=self.cookie("x", 0))
         if path == "/api/users":
             if not admin:
-                return self.err("사장님(관리자)만 할 수 있습니다", 403)
-            return self.make_user(c, d, "admin" if d.get("role") == "admin" else "staff")
-        m = re.fullmatch(r"/api/users/(\d+)/(delete|pin)", path)
+                return self.err("관리자만 할 수 있습니다", 403)
+            return self.make_user(c, d, d.get("role") if d.get("role") in ROLES else "staff")
+        if path == "/api/invites":
+            if not admin:
+                return self.err("관리자만 할 수 있습니다", 403)
+            tok = new_invite(c, d.get("role") if d.get("role") in ROLES else "staff")
+            broadcast()
+            return self.send_json({"ok": True, "token": tok})
+        if path == "/api/invites/delete":
+            if not admin:
+                return self.err("관리자만 할 수 있습니다", 403)
+            c.execute("DELETE FROM invites WHERE token=?", (str(d.get("token", "")),))
+            broadcast()
+            return self.send_json({"ok": True})
+        m = re.fullmatch(r"/api/users/(\d+)/(delete|pin|role)", path)
         if m:
             uid, act = int(m.group(1)), m.group(2)
             if not (admin or (act == "pin" and uid == me["id"])):
@@ -304,6 +353,12 @@ class H(BaseHTTPRequestHandler):
                     return self.err("본인 계정은 삭제할 수 없습니다")
                 c.execute("UPDATE users SET active=0, name=name||' (퇴사 '||id||')' WHERE id=?", (uid,))
                 c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+            elif act == "role":
+                if not admin or d.get("role") not in ROLES:
+                    return self.err("권한이 없습니다", 403)
+                if uid == me["id"]:
+                    return self.err("본인 직책은 바꿀 수 없습니다")
+                c.execute("UPDATE users SET role=? WHERE id=?", (d["role"], uid))
             else:
                 pin = str(d.get("pin", ""))
                 if len(pin) < 4:
@@ -341,8 +396,8 @@ class H(BaseHTTPRequestHandler):
         act = m.group(2)
 
         if act == "delete":
-            if not (admin or t["creator_id"] == me["id"]):
-                return self.err("등록한 사람이나 사장님만 삭제할 수 있습니다", 403)
+            if not (boss or t["creator_id"] == me["id"]):
+                return self.err("등록한 사람이나 관리자·팀장만 삭제할 수 있습니다", 403)
             c.execute("DELETE FROM tasks WHERE id=?", (t["id"],))
             notify("🗑 업무 삭제\n「%s」\n삭제: %s" % (t["title"], me["name"]))
         elif act == "log":
@@ -401,7 +456,11 @@ class H(BaseHTTPRequestHandler):
     def make_user(self, c, d, role, login=False):
         name, pin = str(d.get("name", "")).strip()[:30], str(d.get("pin", ""))
         if not name or len(pin) < 4:
-            return self.err("이름과 4자 이상 비밀번호를 적어 주세요")
+            self.err("이름과 4자 이상 비밀번호를 적어 주세요")
+            return False
+        if c.execute("SELECT 1 FROM users WHERE name=?", (name,)).fetchone():
+            self.err("이미 있는 이름입니다. 다른 이름을 적어 주세요")
+            return False
         salt = secrets.token_hex(16)
         cur = c.execute("INSERT INTO users(name,role,salt,hash) VALUES(?,?,?,?)", (name, role, salt, hash_pin(pin, salt)))
         headers = None
@@ -411,6 +470,7 @@ class H(BaseHTTPRequestHandler):
             headers = self.cookie(tok)
         broadcast()
         self.send_json({"ok": True}, headers=headers)
+        return True
 
 
 if __name__ == "__main__":
@@ -420,6 +480,16 @@ if __name__ == "__main__":
             with open(SETUP_FILE, "w") as f:
                 f.write("%06d" % secrets.randbelow(10 ** 6))
             os.chmod(SETUP_FILE, 0o600)
+        # 처음 한 번: 직책별 가입 링크를 만들어 파일로 남김 (서버가 사장님 텔레그램으로 전달 후 삭제)
+        flag = os.path.join(BASE, "invites_made")
+        if not os.path.exists(flag):
+            base = BOARD_URL or "http://127.0.0.1:%d" % PORT
+            lines = ["%s 가입 링크%s\n%s/?join=%s" % (ROLES[r], " (1회용)" if r == "admin" else "", base, new_invite(c, r))
+                     for r in ("admin", "lead", "staff")]
+            with open(os.path.join(BASE, "invite_links"), "w", encoding="utf-8") as f:
+                f.write("\n\n".join(lines))
+            os.chmod(os.path.join(BASE, "invite_links"), 0o600)
+            open(flag, "w").close()
     threading.Thread(target=digest_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1" if os.environ.get("LOCAL_ONLY", "1") == "1" else "0.0.0.0", PORT), H)
     srv.daemon_threads = True

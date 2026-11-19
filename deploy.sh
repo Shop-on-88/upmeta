@@ -78,6 +78,11 @@ S
       if systemctl is-active -q $BSVC; then
         log "BOARD OK ($MSG)"; notify "✅ UP META 업무 보드 업데이트 완료
 $MSG"
+        if [ -s $BD/invite_links ]; then
+          notify "🔗 UP META 업무 보드 가입 링크 (7일간 유효)
+
+$(cat $BD/invite_links)" && rm -f $BD/invite_links
+        fi
       else
         for f in app.py index.html; do [ -f "$BD/prev/$f" ] && cp -p "$BD/prev/$f" "$BD/$f"; done
         systemctl restart $BSVC

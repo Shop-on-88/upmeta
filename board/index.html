@@ -72,6 +72,8 @@ textarea{min-height:76px;resize:vertical}
 const ST={new:'미확인',ack:'확인',doing:'진행 중',hold:'보류',stop:'중지',done:'완료'};
 const NEED={hold:'보류 사유',stop:'중지 사유',done:'완료 내용 (어떻게 완료했는지)'};
 const PR={high:'긴급',normal:'보통',low:'낮음'};
+const RL={admin:'관리자',lead:'팀장',staff:'직원'};
+const JOIN=new URLSearchParams(location.search).get('join')||'';
 let S=null,filter='open',who='all',modal=null,es=null,live=false;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -87,7 +89,7 @@ async function api(path,data){
 }
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),2200)}
 async function load(){
-  try{S=await api('/api/state')}catch(e){return}
+  try{S=await api('/api/state'+(JOIN?'?join='+encodeURIComponent(JOIN):''))}catch(e){return}
   if(S.me&&!es)connect();
   render();
 }
@@ -110,6 +112,13 @@ function render(){
 }
 function loginView(){
   const setup=S.setup;
+  if(JOIN&&(S.join||!setup))return S.join?`<div class="login"><h1>UP META <span style="color:var(--ac)">업무 보드</span></h1>
+  <p>가입 직책: <b style="color:var(--tx)">${RL[S.join.role]}</b> — 사용할 이름과 비밀번호를 정해 주세요.</p>
+  <form onsubmit="doJoin(event)"><label>이름</label><input id="ln" autocomplete="username" required maxlength="30">
+  <label>비밀번호 (4자 이상)</label><input id="lp" type="password" autocomplete="new-password" required minlength="4">
+  <button class="btn">가입하기</button><div class="msg" id="lm"></div></form>
+  <p style="margin-top:18px;font-size:13px">이미 가입했다면 <a href="/" style="color:var(--ac)">로그인</a></p></div>`
+  :`<div class="login"><h1>UP META <span style="color:var(--ac)">업무 보드</span></h1><p>가입 링크가 만료되었거나 잘못되었습니다.<br>관리자에게 새 링크를 받아 주세요.</p><a class="btn" style="display:block;text-align:center;text-decoration:none" href="/">로그인 화면으로</a></div>`;
   return `<div class="login"><h1>UP META <span style="color:var(--ac)">업무 보드</span></h1>
   <p>${setup?'처음 사용입니다. 사장님(관리자) 계정을 만들어 주세요.':'이름과 비밀번호로 들어오세요.'}</p>
   <form onsubmit="doLogin(event,${setup})"><label>이름</label><input id="ln" autocomplete="username" required>
@@ -120,6 +129,11 @@ function loginView(){
 async function doLogin(e,setup){
   e.preventDefault();
   try{await api(setup?'/api/setup':'/api/login',{name:$('#ln').value,pin:$('#lp').value,code:setup?$('#lc').value:undefined});await load()}
+  catch(x){$('#lm').textContent=x.message}
+}
+async function doJoin(e){
+  e.preventDefault();
+  try{await api('/api/join',{token:JOIN,name:$('#ln').value,pin:$('#lp').value});location.replace('/')}
   catch(x){$('#lm').textContent=x.message}
 }
 function boardView(){
@@ -183,7 +197,7 @@ async function saveTask(e){
 }
 function taskView(){
   const t=S.tasks.find(x=>x.id===modal.id);if(!t)return'';
-  const canDel=S.me.role==='admin'||t.creator_id===S.me.id,p=modal.pick;
+  const canDel=S.me.role!=='staff'||t.creator_id===S.me.id,p=modal.pick;
   return `<h2><span class="badge" style="--c:var(--${t.status})">${ST[t.status]}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}<button class="x" onclick="closeModal()">×</button></h2>
   <div class="ttl" style="font-size:19px;margin-top:0">${esc(t.title)}</div>
   <div class="row"><span class="tag">👤 담당 ${esc(uname(t.assignee_id))}</span><span class="tag">✍️ 지시 ${esc(uname(t.creator_id))}</span>${t.due?`<span class="tag">📅 ${t.due}</span>`:''}</div>
@@ -214,15 +228,33 @@ async function delTask(b){
 }
 function menuView(){
   const admin=S.me.role==='admin';
-  return `<h2>${esc(S.me.name)} <span class="tag">${admin?'관리자':'직원'}</span><button class="x" onclick="closeModal()">×</button></h2>
-  ${admin?`<label>직원 관리</label>${S.users.filter(u=>u.active).map(u=>`<div class="urow"><b>${esc(u.name)}</b><span class="tag">${u.role==='admin'?'관리자':'직원'}</span><span class="sp"></span>
-  <button onclick="resetPin(${u.id})">비밀번호 변경</button>${u.id!==S.me.id?`<button onclick="delUser(this,${u.id})">삭제</button>`:''}</div>`).join('')}
-  <label>직원 추가</label><div class="g2"><input id="un" placeholder="이름"><input id="up" type="password" placeholder="비밀번호 (4자 이상)" autocomplete="new-password"></div>
-  <select id="ur" style="margin-top:8px"><option value="staff">직원</option><option value="admin">관리자 (사장님·팀장)</option></select>
+  return `<h2>${esc(S.me.name)} <span class="tag">${RL[S.me.role]}</span><button class="x" onclick="closeModal()">×</button></h2>
+  ${admin?`<label>가입 링크 (받은 사람이 이름·비밀번호를 직접 정해 가입, 7일간 유효)</label>
+  <div class="sts">${Object.keys(RL).map(k=>`<button class="st" style="--c:var(--tx)" onclick="mkInvite('${k}')">${RL[k]} 링크</button>`).join('')}</div>
+  ${(S.invites||[]).map(v=>`<div class="urow"><span class="tag" style="min-width:42px">${RL[v.role]}</span><input readonly value="${location.origin}/?join=${esc(v.token)}" onclick="this.select()" style="padding:7px 9px;font-size:12px">
+  <button onclick="copyInv(this)">복사</button><button onclick="rmInvite('${esc(v.token)}')">삭제</button></div>`).join('')}
+  <label>구성원</label>${S.users.filter(u=>u.active).map(u=>`<div class="urow"><b>${esc(u.name)}</b><span class="sp"></span>
+  ${u.id!==S.me.id?`<select style="width:auto;padding:4px 6px;font-size:13px" onchange="setRole(${u.id},this.value)">${Object.keys(RL).map(k=>`<option value="${k}" ${k===u.role?'selected':''}>${RL[k]}</option>`).join('')}</select>`:`<span class="tag">${RL[u.role]}</span>`}
+  <button onclick="resetPin(${u.id})">비밀번호</button>${u.id!==S.me.id?`<button onclick="delUser(this,${u.id})">삭제</button>`:''}</div>`).join('')}
+  <label>직접 추가</label><div class="g2"><input id="un" placeholder="이름"><input id="up" type="password" placeholder="비밀번호 (4자 이상)" autocomplete="new-password"></div>
+  <select id="ur" style="margin-top:8px"><option value="staff">직원</option><option value="lead">팀장</option><option value="admin">관리자</option></select>
   <button class="btn gh" style="margin-top:8px" onclick="addUser()">추가</button>`
   :`<button class="btn gh" onclick="resetPin(${S.me.id})">내 비밀번호 변경</button>`}
   <div id="pinbox"></div><div class="msg" id="mm"></div>
   <button class="btn dg" onclick="logout()">로그아웃</button>`;
+}
+async function mkInvite(role){
+  try{await api('/api/invites',{role});await load();showModal();toast(RL[role]+' 가입 링크를 만들었습니다')}catch(x){$('#mm').textContent=x.message}
+}
+async function rmInvite(token){
+  try{await api('/api/invites/delete',{token});await load();showModal()}catch(x){$('#mm').textContent=x.message}
+}
+function copyInv(b){
+  const i=b.previousElementSibling;i.select();
+  try{navigator.clipboard.writeText(i.value).then(()=>toast('복사되었습니다'),()=>document.execCommand('copy'))}catch(e){document.execCommand('copy')}
+}
+async function setRole(id,role){
+  try{await api('/api/users/'+id+'/role',{role});await load();showModal();toast('직책이 변경되었습니다')}catch(x){$('#mm').textContent=x.message}
 }
 async function addUser(){
   try{await api('/api/users',{name:$('#un').value,pin:$('#up').value,role:$('#ur').value});await load();showModal();toast('추가되었습니다')}
