@@ -204,8 +204,16 @@ def tg_photo(method, photo, **params):
         return {"ok": False, "description": str(e)}
 
 
+status_lock = threading.Lock()
+
+
 def status_update(fresh=False):
     """현황판을 고쳐 씀. fresh=True 이거나 고칠 글이 없으면 새로 올림"""
+    with status_lock:
+        _status_update(fresh)
+
+
+def _status_update(fresh):
     chat = tg_chat()
     if not (TG_TOKEN and chat):
         return
@@ -410,6 +418,17 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?")[0]
         d = self.body()
+        if path == "/internal/status":  # 같은 서버의 봇이 부르는 주소: 현황판 카드를 새로 올림 (/board 명령)
+            if self.client_address[0] != "127.0.0.1" or self.headers.get("X-Forwarded-For"):
+                return self.err("없는 주소입니다", 404)
+            if str(d.get("chat", "")) != tg_chat():
+                return self.send_json({"ok": False, "reason": "chat"})
+            try:
+                status_update(fresh=True)
+                return self.send_json({"ok": True})
+            except Exception as e:
+                print("status error:", e, flush=True)
+                return self.send_json({"ok": False, "reason": "error"})
         # CSRF: 다른 사이트에서 온 요청 거절
         origin = self.headers.get("Origin")
         if origin and urllib.parse.urlparse(origin).netloc != (self.headers.get("Host") or ""):

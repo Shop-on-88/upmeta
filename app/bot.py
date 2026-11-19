@@ -438,6 +438,32 @@ async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE):
     log.warning("오류: %s", ctx.error)
 
 
+BOARD_API = "http://127.0.0.1:18473/internal/status"  # 업무 보드(board.upmeta.online)
+
+
+async def board_card(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """/board — 업무 보드 알림방에 현황판 카드를 새로 올림"""
+    import asyncio, json, urllib.request
+    chat = update.effective_chat
+
+    def call():
+        req = urllib.request.Request(BOARD_API, json.dumps({"chat": chat.id}).encode(),
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+    try:
+        res = await asyncio.to_thread(call)
+    except Exception as e:
+        log.warning("board card 실패: %s", e)
+        res = {"ok": False, "reason": "error"}
+    if res.get("ok"):
+        return
+    if res.get("reason") == "chat":
+        await chat.send_message("업무 현황판은 업무 보드 알림방에서만 볼 수 있습니다.")
+    else:
+        await chat.send_message("현황판을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+
+
 def main():
     token = os.environ.get("BOT_TOKEN")
     if not token:
@@ -448,6 +474,7 @@ def main():
     app.add_handler(CommandHandler(["start", "menu"], start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("setup", setup_sets))
+    app.add_handler(CommandHandler(["board", "b"], board_card))
     import poster  # 팀장님 전용 채널 글쓰기 (데모 기능과 별개)
     poster.setup(app, _emoji_ids, SET_EMOJI)
     app.add_handler(CallbackQueryHandler(on_button))
