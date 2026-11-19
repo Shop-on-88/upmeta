@@ -68,7 +68,7 @@ S
   if [ $bok = 1 ]; then
     mkdir -p $BD/prev
     [ -f $BD/chat_id ] || echo "-5467374222" > $BD/chat_id   # 업무 보드 알림을 받는 텔레그램 그룹
-    for f in app.py index.html; do
+    for f in app.py index.html card.py; do
       cmp -s "board/$f" "$BD/$f" && continue
       [ -f "$BD/$f" ] && cp -p "$BD/$f" "$BD/prev/$f"
       cp "board/$f" "$BD/$f"; bch=1
@@ -84,7 +84,7 @@ $MSG"
 $(cat $BD/invite_links)" && rm -f $BD/invite_links
         fi
       else
-        for f in app.py index.html; do [ -f "$BD/prev/$f" ] && cp -p "$BD/prev/$f" "$BD/$f"; done
+        for f in app.py index.html card.py; do [ -f "$BD/prev/$f" ] && cp -p "$BD/prev/$f" "$BD/$f"; done
         systemctl restart $BSVC
         log "BOARD ROLLBACK ($MSG)"; notify "⚠️ UP META 업무 보드 새 버전이 안 켜져서 원래대로 되돌렸어요
 $(journalctl -u $BSVC -n 6 --no-pager -o cat | tail -c 500)"

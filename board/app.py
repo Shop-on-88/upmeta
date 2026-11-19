@@ -121,8 +121,12 @@ def tg_call(method, **params):
         return {"ok": False, "description": str(e)}
 
 
-def status_text():
-    """그룹방에 띄워 두는 현황판 글"""
+SECTIONS = [("new", "", 5), ("doing", "", 5), ("ack", "", 4), ("hold", "사유", 4), ("done", "완료", 4)]
+VENV_PY = "/root/upmeta/demo-bot/venv/bin/python"  # 서버 기본 파이썬에 Pillow가 없을 때 사용
+
+
+def status_data():
+    """현황판에 들어갈 내용"""
     now = datetime.now(KST)
     today = now.strftime("%Y-%m-%d")
     day0 = datetime(now.year, now.month, now.day, tzinfo=KST).timestamp()
@@ -130,63 +134,114 @@ def status_text():
         rows = c.execute("SELECT * FROM tasks ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, "
                          "CASE due WHEN '' THEN '9' ELSE due END, updated DESC").fetchall()
         names = {r["id"]: r["name"] for r in c.execute("SELECT id,name FROM users")}
-    cnt = {k: sum(1 for r in rows if r["status"] == k) for k in STATUS}
-    done_today = [r for r in rows if r["status"] == "done" and r["updated"] >= day0]
-    out = ["📊 UP META 업무 현황판", "%d/%d %02d:%02d 기준 · 자동 갱신" % (now.month, now.day, now.hour, now.minute), "",
-           "🔴 미확인 %d  👀 확인 %d  ▶️ 진행 중 %d" % (cnt["new"], cnt["ack"], cnt["doing"]),
-           "⏸ 보류 %d  ⛔ 중지 %d  ✅ 오늘 완료 %d" % (cnt["hold"], cnt["stop"], len(done_today))]
-    icons = [("new", "🔴 미확인"), ("ack", "👀 확인"), ("doing", "▶️ 진행 중"), ("hold", "⏸ 보류")]
-    for k, title in icons:
-        items = [r for r in rows if r["status"] == k]
-        if not items:
-            continue
-        out += ["", "%s (%d)" % (title, len(items))]
-        for r in items[:12]:
-            line = "• %s[%s] %s — %s" % ("🔥" if r["priority"] == "high" else "", r["category"] or "기타",
-                                         r["title"][:60], names.get(r["assignee_id"], "미지정"))
-            if r["due"]:
-                line += " (~%s)%s" % (r["due"][5:].replace("-", "/"), " ⚠️기한 지남" if r["due"] < today else "")
-            out.append(line)
-            if k == "hold" and r["status_note"]:
-                out.append("   └ 사유: " + r["status_note"][:80])
-        if len(items) > 12:
-            out.append("   … 외 %d건" % (len(items) - 12))
-    if done_today:
-        out += ["", "✅ 오늘 완료 (%d)" % len(done_today)]
-        out += ["• [%s] %s — %s" % (r["category"] or "기타", r["title"][:60], names.get(r["assignee_id"], "미지정"))
-                for r in done_today[:8]]
-    if not any(cnt[k] for k in ("new", "ack", "doing", "hold")) and not done_today:
-        out += ["", "진행 중인 업무가 없습니다."]
-    if BOARD_URL:
-        out += ["", BOARD_URL]
-    return "\n".join(out)[:4000]
+    groups = {k: [r for r in rows if r["status"] == k] for k in STATUS}
+    groups["done"] = [r for r in groups["done"] if r["updated"] >= day0]
+    sections = []
+    for k, note_label, limit in SECTIONS:
+        items = [{"cat": r["category"] or "기타", "title": r["title"], "who": names.get(r["assignee_id"], "미지정"),
+                  "due": r["due"][5:].replace("-", "/") if r["due"] else "",
+                  "late": bool(r["due"]) and r["due"] < today and k != "done", "hot": r["priority"] == "high",
+                  "note": r["status_note"] if note_label else ""} for r in groups[k][:limit]]
+        sections.append({"key": k, "total": len(groups[k]), "note_label": note_label, "items": items})
+    return {"now": "%d/%d %02d:%02d" % (now.month, now.day, now.hour, now.minute),
+            "counts": {k: len(v) for k, v in groups.items()}, "sections": sections, "url": BOARD_URL}
+
+
+def status_card(data):
+    """카드 이미지(JPEG). 만들 수 없으면 None"""
+    try:
+        import card
+        return card.render(data)
+    except ImportError:
+        pass
+    except Exception as e:
+        print("card error:", e, flush=True)
+        return None
+    try:
+        import subprocess
+        r = subprocess.run([VENV_PY, os.path.join(BASE, "card.py")], input=json.dumps(data).encode(),
+                           capture_output=True, timeout=40)
+        if r.returncode == 0 and r.stdout[:2] == b"\xff\xd8":
+            return r.stdout
+        print("card error:", r.stderr.decode(errors="replace")[-300:], flush=True)
+    except Exception as e:
+        print("card error:", e, flush=True)
+    return None
+
+
+def status_text(data):
+    """카드를 만들 수 없을 때만 쓰는 글 현황판"""
+    names = {"new": "미확인", "ack": "확인", "doing": "진행 중", "hold": "보류", "stop": "중지", "done": "오늘 완료"}
+    out = ["UP META 업무 현황판 · %s 기준" % data["now"], "",
+           "  ".join("%s %d" % (names[k], data["counts"][k]) for k in names)]
+    for sec in data["sections"]:
+        if sec["items"]:
+            out += ["", "[%s] %d건" % (names[sec["key"]], sec["total"])]
+            out += ["- (%s) %s / %s%s" % (i["cat"], i["title"][:60], i["who"], (" / ~" + i["due"]) if i["due"] else "")
+                    for i in sec["items"]]
+    return "\n".join(out + ["", data["url"]])[:4000]
+
+
+def tg_photo(method, photo, **params):
+    """사진을 붙여 보내는 텔레그램 호출 (sendPhoto / editMessageMedia)"""
+    bd = "----tb" + secrets.token_hex(12)
+    body = b""
+    for k, v in params.items():
+        body += ("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n" % (bd, k, v)).encode()
+    body += ("--%s\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"board.jpg\"\r\n"
+             "Content-Type: image/jpeg\r\n\r\n" % bd).encode() + photo + ("\r\n--%s--\r\n" % bd).encode()
+    req = urllib.request.Request("https://api.telegram.org/bot%s/%s" % (TG_TOKEN, method), body,
+                                 {"Content-Type": "multipart/form-data; boundary=" + bd})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read())
+        except Exception:
+            return {"ok": False, "description": str(e)}
+    except Exception as e:
+        return {"ok": False, "description": str(e)}
 
 
 def status_update(fresh=False):
-    """현황판 글을 고쳐 씀. fresh=True 이거나 고칠 글이 없으면 새로 올림"""
+    """현황판을 고쳐 씀. fresh=True 이거나 고칠 글이 없으면 새로 올림"""
     chat = tg_chat()
     if not (TG_TOKEN and chat):
         return
-    text = status_text()
+    data = status_data()
+    photo = status_card(data)
+    kind = "photo" if photo else "text"
+    caption = "UP META 업무 현황판 · %s 기준%s" % (data["now"], ("\n" + BOARD_URL) if BOARD_URL else "")
     try:
         with open(STATUS_FILE) as f:
             st = json.load(f)
     except Exception:
         st = {}
     if st.get("chat") == chat and st.get("id"):
-        if not fresh:
-            r = tg_call("editMessageText", chat_id=chat, message_id=st["id"], text=text, disable_web_page_preview="true")
-            if r.get("ok") or "not modified" in str(r.get("description", "")):
+        if not fresh and st.get("kind", "text") == kind:
+            if photo:
+                r = tg_photo("editMessageMedia", photo, chat_id=chat, message_id=st["id"],
+                             media=json.dumps({"type": "photo", "media": "attach://photo", "caption": caption}))
+            else:
+                r = tg_call("editMessageText", chat_id=chat, message_id=st["id"], text=status_text(data),
+                            disable_web_page_preview="true")
+            desc = str(r.get("description", ""))
+            if r.get("ok") or "not modified" in desc:
                 return
-            if "not found" not in str(r.get("description", "")) and "can't be edited" not in str(r.get("description", "")):
-                print("status edit error:", r.get("description"), flush=True)
+            if "not found" not in desc and "can't be edited" not in desc:
+                print("status edit error:", desc, flush=True)
                 return  # 일시적인 오류: 다음 변경 때 다시 시도
         else:
             tg_call("deleteMessage", chat_id=chat, message_id=st["id"])
-    r = tg_call("sendMessage", chat_id=chat, text=text, disable_web_page_preview="true", disable_notification="true")
+    if photo:
+        r = tg_photo("sendPhoto", photo, chat_id=chat, caption=caption, disable_notification="true")
+    else:
+        r = tg_call("sendMessage", chat_id=chat, text=status_text(data), disable_web_page_preview="true",
+                    disable_notification="true")
     if r.get("ok"):
         with open(STATUS_FILE, "w") as f:
-            json.dump({"chat": chat, "id": r["result"]["message_id"]}, f)
+            json.dump({"chat": chat, "id": r["result"]["message_id"], "kind": kind}, f)
     else:
         print("status send error:", r.get("description"), flush=True)
 
