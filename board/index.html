@@ -85,7 +85,7 @@ const PR={high:'긴급',normal:'보통',low:'낮음'};
 const CATS=['광고관련','계정관련','결제관련','홈페이지관련','기타'];let cat='all';
 const RL={admin:'관리자',lead:'팀장',staff:'직원'};
 const JOIN=new URLSearchParams(location.search).get('join')||'';
-let S=null,filter='open',who='all',modal=null,es=null,live=false;
+let busy=false,S=null,filter='open',who='all',modal=null,es=null,live=false;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
@@ -117,7 +117,7 @@ function render(){
   let main=$('#main');
   if(!main){app.innerHTML='<div class="wrap" id="main"></div><button class="fab" onclick="openNew()">＋ 업무 지시</button><div id="mod"></div>';main=$('#main')}
   main.innerHTML=boardView();
-  if(modal&&modal.type==='task'&&!$('#mod textarea:focus, #mod input:focus')){
+  if(modal&&modal.type==='task'&&!busy&&!modal.pick&&!modal.sn&&!modal.nt&&!$('#mod textarea:focus, #mod input:focus')){
     S.tasks.some(t=>t.id===modal.id)?showModal():closeModal();
   }
 }
@@ -181,13 +181,15 @@ function boardView(){
 function setF(f){filter=filter===f&&f!=='open'&&f!=='all'?'open':f;render()}
 function setW(w){who=w;render()}
 function setC(c){cat=c;render()}
-function closeModal(){modal=null;$('#mod').innerHTML=''}
+function closeModal(){modal=null;const m=$('#mod');m.innerHTML='';delete m.dataset.k}
 function showModal(){
   const m=$('#mod');let h='';
   if(modal.type==='new'||modal.type==='edit')h=formView();
   else if(modal.type==='task')h=taskView();
   else if(modal.type==='menu')h=menuView();
+  const sc=m.querySelector('.sheet'),top=sc?sc.scrollTop:0,same=m.dataset.k===modal.type+':'+modal.id;
   m.innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="sheet">${h}</div></div>`;
+  m.dataset.k=modal.type+':'+modal.id;if(same)m.querySelector('.sheet').scrollTop=top;
   dueLabel();
 }
 function openNew(){modal={type:'new'};showModal();$('#ft').focus()}
@@ -237,24 +239,31 @@ function taskView(){
   ${t.detail?`<div class="detail">${esc(t.detail)}</div>`:''}
   ${t.status_note?`<div class="note"><b>${ST[t.status]}:</b> ${esc(t.status_note)}</div>`:''}
   <label>상태 변경</label><div class="sts">${Object.keys(ST).map(k=>`<button class="st ${(p||t.status)===k?'on':''}" style="--c:var(--${k})" onclick="pickSt('${k}')">${ST[k]}</button>`).join('')}</div>
-  ${p&&p!==t.status?`<label>${NEED[p]||'메모 (선택)'}</label><textarea id="sn" placeholder="${NEED[p]?'반드시 적어 주세요':''}"></textarea>
+  ${p&&p!==t.status?`<label>${NEED[p]||'메모 (선택)'}</label><textarea id="sn" oninput="modal.sn=this.value" placeholder="${NEED[p]?'반드시 적어 주세요':''}">${esc(modal.sn||'')}</textarea>
   <button class="btn" onclick="saveSt()">「${ST[p]}」(으)로 변경</button>`:''}
   <div class="msg" id="tm"></div>
-  <label>특이사항 추가</label><textarea id="nt" placeholder="공유할 특이사항, 진행 상황"></textarea>
+  <label>특이사항 추가</label><textarea id="nt" oninput="modal.nt=this.value" placeholder="공유할 특이사항, 진행 상황">${esc(modal.nt||'')}</textarea>
   <button class="btn gh" style="margin-top:8px" onclick="addNote()">특이사항 올리기</button>
   <div class="g2"><button class="btn gh" onclick="modal={type:'edit',id:${t.id}};showModal()">수정</button>
   ${canDel?`<button class="btn dg" id="del" onclick="delTask(this)">삭제</button>`:'<span></span>'}</div>
   <label>기록</label>${t.logs.map(l=>`<div class="log"><time>${fmt(l.created)}</time><div><b>${esc(uname(l.user_id))}</b> ${esc(l.text)}</div></div>`).join('')}`;
 }
 function pickSt(k){modal.pick=k;showModal();const s=$('#sn');if(s)s.focus()}
-async function saveSt(){
-  try{await api('/api/tasks/'+modal.id,{status:modal.pick,note:$('#sn').value});modal.pick=null;await load();showModal();toast('상태가 변경되었습니다')}
-  catch(x){$('#tm').textContent=x.message}
+// 상태 변경 메모와 특이사항을 둘 다 적었으면 어느 버튼을 눌러도 둘 다 저장
+async function saveAll(){
+  const m=modal,t=S.tasks.find(x=>x.id===m.id),p=m.pick;
+  const memo=(m.sn||'').trim(),note=(m.nt||'').trim(),chg=!!(p&&t&&p!==t.status);
+  if(!chg&&!note){$('#tm').textContent='특이사항 내용을 적어 주세요';return}
+  if(chg&&NEED[p]&&!memo){$('#tm').textContent=NEED[p].split(' (')[0]+': 내용을 적어 주세요';const e=$('#sn');if(e)e.focus();return}
+  if(busy)return;busy=true;let err='';
+  try{
+    if(chg){await api('/api/tasks/'+m.id,{status:p,note:memo});m.pick=null;m.sn=''}
+    if(note){await api('/api/tasks/'+m.id+'/log',{text:note});m.nt=''}
+  }catch(x){err=x.message}
+  busy=false;await load();if(modal!==m)return;showModal();
+  if(err)$('#tm').textContent=err;else toast(chg&&note?'상태 변경과 특이사항이 저장되었습니다':chg?'상태가 변경되었습니다':'특이사항이 공유되었습니다');
 }
-async function addNote(){
-  try{await api('/api/tasks/'+modal.id+'/log',{text:$('#nt').value});await load();showModal();toast('특이사항이 공유되었습니다')}
-  catch(x){$('#tm').textContent=x.message}
-}
+const saveSt=saveAll,addNote=saveAll;
 async function delTask(b){
   if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='한 번 더 누르면 삭제';return}
   try{await api('/api/tasks/'+modal.id+'/delete',{});closeModal();toast('삭제되었습니다');load()}catch(x){$('#tm').textContent=x.message}

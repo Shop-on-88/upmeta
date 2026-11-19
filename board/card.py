@@ -90,82 +90,81 @@ def logo(img, d, x, y, s=64):
            fill=NAVY, width=max(4, int(20 * k)), joint="curve")
 
 
+MAX_ROWS = 7
+
+
 def render(data):
-    img = Image.new("RGB", (W, 4200), BG)
+    img = Image.new("RGB", (W, 2400), BG)
     d = ImageDraw.Draw(img)
 
     # 머리띠
-    d.rectangle([0, 0, W, 210], fill=NAVY2)
-    logo(img, d, PAD, 52)
-    d.text((PAD + 86, 84), "UP META", font=F(34, "black"), fill="#FFFFFF", anchor="lm")
-    pill(d, W - PAD, 60, "실시간", BLUE, "#FFFFFF", size=24, h=46, padx=18, right=True)
-    d.text((PAD, 150), "업무 현황판", font=F(44, "black"), fill="#FFFFFF", anchor="lm")
-    d.text((W - PAD, 152), data["now"] + " 기준", font=F(26, "regular"), fill="#C9D4F2", anchor="rm")
-    y = 250
+    d.rectangle([0, 0, W, 176], fill=NAVY2)
+    logo(img, d, PAD, 56)
+    d.text((PAD + 86, 74), "UP META", font=F(28, "black"), fill="#C9D4F2", anchor="lm")
+    d.text((PAD + 86, 118), "업무 현황판", font=F(42, "black"), fill="#FFFFFF", anchor="lm")
+    pill(d, W - PAD, 46, "실시간", BLUE, "#FFFFFF", size=24, h=46, padx=18, right=True)
+    d.text((W - PAD, 126), data["now"] + " 기준", font=F(26, "regular"), fill="#C9D4F2", anchor="rm")
+    y = 176 + 32
 
-    # 숫자 타일 3 x 2
-    gap = 20
-    cw = (W - PAD * 2 - gap * 2) / 3
-    ch = 168
+    # 숫자 타일 한 줄 (6칸)
+    gap = 14
+    cw = (W - PAD * 2 - gap * 5) / 6
+    ch = 150
     for i, k in enumerate(["new", "ack", "doing", "hold", "stop", "done"]):
-        cx = PAD + (i % 3) * (cw + gap)
-        cy = y + (i // 3) * (ch + gap)
+        cx = PAD + i * (cw + gap)
         col = TONE[k][0]
-        d.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=28, fill=col)
-        d.rounded_rectangle([cx, cy, cx + cw, cy + ch - 9], radius=28, fill=CARD)
-        d.text((cx + 30, cy + 52), LABEL[k], font=F(28, "bold"), fill=INK, anchor="lm")
-        d.ellipse([cx + cw - 44, cy + 40, cx + cw - 22, cy + 62], fill=col)
-        d.text((cx + 30, cy + 112), str(data["counts"].get(k, 0)), font=F(64, "black"), fill=col, anchor="lm")
-        d.text((cx + 34 + d.textlength(str(data["counts"].get(k, 0)), font=F(64, "black")), cy + 122), "건",
-               font=F(26, "bold"), fill=MUTED, anchor="lm")
-    y += ch * 2 + gap + 44
+        n = str(data["counts"].get(k, 0))
+        d.rounded_rectangle([cx, y, cx + cw, y + ch], radius=24, fill=col)
+        d.rounded_rectangle([cx, y, cx + cw, y + ch - 8], radius=24, fill=CARD)
+        d.text((cx + cw / 2, y + 58), n, font=F(60, "black"), fill=col if n != "0" else "#B6BFD3", anchor="mm")
+        d.text((cx + cw / 2, y + 112), LABEL[k], font=F(25, "bold"), fill=INK, anchor="mm")
+    y += ch + 34
 
-    # 상태별 목록
-    any_rows = False
+    # 진행 중인 업무 목록 (미확인 → 진행 중 → 확인 → 보류)
+    rows, total = [], 0
     for sec in data["sections"]:
-        items = sec["items"]
-        if not items:
+        if sec["key"] == "done":
             continue
-        any_rows = True
-        col, soft, ink = TONE[sec["key"]]
-        d.rounded_rectangle([PAD, y + 6, PAD + 10, y + 46], radius=5, fill=col)
-        d.text((PAD + 28, y + 26), LABEL[sec["key"]], font=F(34, "black"), fill=INK, anchor="lm")
-        d.text((PAD + 40 + d.textlength(LABEL[sec["key"]], font=F(34, "black")), y + 28), "%d건" % sec["total"],
-               font=F(28, "bold"), fill=col, anchor="lm")
-        y += 68
-        for it in items:
-            rh = 178 if it.get("note") else 132
-            d.rounded_rectangle([PAD, y, W - PAD, y + rh], radius=24, fill=CARD)
-            x = PAD + 28
-            x += pill(d, x, y + 22, it["cat"], "#EEF2FF", NAVY, size=22, h=40, padx=14) + 10
-            right = W - PAD - 28
-            if it.get("late"):
-                right -= pill(d, right, y + 22, "기한 지남", "#FDE7E2", "#B42318", size=22, h=40, padx=14, right=True) + 10
-            if it.get("hot"):
-                right -= pill(d, right, y + 22, "긴급", "#D92D20", "#FFFFFF", size=22, h=40, padx=14, right=True) + 10
-            meta = it["who"] + (("  ·  ~" + it["due"]) if it.get("due") else "")
-            d.text((right, y + 42), fit(d, meta, F(25, "regular"), right - x - 10), font=F(25, "regular"), fill=MUTED, anchor="rm")
-            d.text((PAD + 28, y + 96), fit(d, it["title"], F(34, "bold"), W - PAD * 2 - 56), font=F(34, "bold"), fill=INK, anchor="lm")
-            if it.get("note"):
-                d.rounded_rectangle([PAD + 28, y + 126, W - PAD - 28, y + 164], radius=10, fill=soft)
-                d.text((PAD + 44, y + 145), fit(d, sec.get("note_label", "사유") + "  " + it["note"], F(23, "bold"), W - PAD * 2 - 90),
-                       font=F(23, "bold"), fill=ink, anchor="lm")
-            y += rh + 14
-        if sec["total"] > len(items):
-            d.text((W - PAD - 8, y + 12), "외 %d건은 업무 보드에서 확인" % (sec["total"] - len(items)),
-                   font=F(24, "regular"), fill=MUTED, anchor="rm")
-            y += 40
-        y += 26
-    if not any_rows:
-        d.rounded_rectangle([PAD, y, W - PAD, y + 150], radius=24, fill=CARD)
-        d.text((W / 2, y + 75), "진행 중인 업무가 없습니다", font=F(32, "bold"), fill=MUTED, anchor="mm")
-        y += 176
+        total += sec["total"]
+        rows += [dict(it, key=sec["key"], note_label=sec.get("note_label", "")) for it in sec["items"]]
+    rows = rows[:MAX_ROWS]
+    d.text((PAD + 4, y + 20), "처리할 업무", font=F(32, "black"), fill=INK, anchor="lm")
+    d.text((PAD + 16 + d.textlength("처리할 업무", font=F(32, "black")), y + 22), "%d건" % total, font=F(28, "bold"), fill=BLUE, anchor="lm")
+    y += 58
+    for it in rows:
+        col, soft, ink = TONE[it["key"]]
+        rh = 156 if it.get("note") else 116
+        d.rounded_rectangle([PAD, y, W - PAD, y + rh], radius=22, fill=col)
+        d.rounded_rectangle([PAD + 9, y, W - PAD, y + rh], radius=22, fill=CARD)
+        d.rectangle([PAD + 9, y, PAD + 30, y + rh], fill=CARD)
+        x = PAD + 34
+        x += pill(d, x, y + 16, LABEL[it["key"]], soft, ink, size=22, h=38, padx=14) + 8
+        x += pill(d, x, y + 16, it["cat"], "#EEF2FF", NAVY, size=22, h=38, padx=14) + 8
+        if it.get("hot"):
+            x += pill(d, x, y + 16, "긴급", "#D92D20", "#FFFFFF", size=22, h=38, padx=14) + 8
+        if it.get("late"):
+            x += pill(d, x, y + 16, "기한 지남", "#FDE7E2", "#B42318", size=22, h=38, padx=14) + 8
+        meta = it["who"] + (("  ·  ~" + it["due"]) if it.get("due") else "")
+        d.text((W - PAD - 28, y + 35), fit(d, meta, F(25, "bold"), W - PAD - 28 - x - 12), font=F(25, "bold"), fill=MUTED, anchor="rm")
+        d.text((PAD + 34, y + 84), fit(d, it["title"], F(32, "bold"), W - PAD * 2 - 62), font=F(32, "bold"), fill=INK, anchor="lm")
+        if it.get("note"):
+            d.text((PAD + 34, y + 128), fit(d, (it["note_label"] or "사유") + "  " + it["note"], F(23, "bold"), W - PAD * 2 - 62),
+                   font=F(23, "bold"), fill=ink, anchor="lm")
+        y += rh + 12
+    if not rows:
+        d.rounded_rectangle([PAD, y, W - PAD, y + 130], radius=22, fill=CARD)
+        d.text((W / 2, y + 65), "처리할 업무가 없습니다", font=F(30, "bold"), fill=MUTED, anchor="mm")
+        y += 142
+    if total > len(rows):
+        d.text((W - PAD - 6, y + 14), "외 %d건은 업무 보드에서 확인" % (total - len(rows)), font=F(24, "bold"), fill=MUTED, anchor="rm")
+        y += 44
+    y += 18
 
     # 바닥
-    d.rounded_rectangle([PAD, y, W - PAD, y + 88], radius=22, fill=NAVY)
-    d.text((PAD + 32, y + 44), "업무 등록 · 상태 변경", font=F(26, "bold"), fill="#C9D4F2", anchor="lm")
-    d.text((W - PAD - 32, y + 44), data.get("url", "").replace("https://", ""), font=F(28, "black"), fill="#FFFFFF", anchor="rm")
-    y += 88 + 44
+    d.rounded_rectangle([PAD, y, W - PAD, y + 78], radius=20, fill=NAVY)
+    d.text((PAD + 30, y + 39), "업무 등록 · 상태 변경", font=F(25, "bold"), fill="#C9D4F2", anchor="lm")
+    d.text((W - PAD - 30, y + 39), data.get("url", "").replace("https://", ""), font=F(27, "black"), fill="#FFFFFF", anchor="rm")
+    y += 78 + 36
 
     buf = io.BytesIO()
     img.crop((0, 0, W, y)).save(buf, "JPEG", quality=92, subsampling=0, optimize=True)
