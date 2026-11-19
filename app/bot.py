@@ -210,6 +210,15 @@ async def load_emoji_ids(app):
 async def on_startup(app):
     await load_sticker_ids(app)
     await load_emoji_ids(app)
+    # 업무 보드 알림방의 "/" 메뉴에 현황판 명령 등록 (누르면 /board@봇이름 으로 전송되어 다른 봇이 있어도 전달됨)
+    try:
+        from telegram import BotCommand, BotCommandScopeChat
+        with open("/root/upmeta/board/chat_id") as f:
+            board_chat = int(f.read().strip())
+        await app.bot.set_my_commands([BotCommand("board", "업무 현황판 카드 보기")],
+                                      scope=BotCommandScopeChat(board_chat))
+    except Exception as e:
+        log.warning("board 명령 등록 실패: %s", e)
 
 
 def counts_of(d):
