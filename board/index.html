@@ -47,6 +47,7 @@ label{display:block;font-size:12px;color:var(--mu);margin:12px 0 5px}
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--ac)}
 textarea{min-height:76px;resize:vertical}
+textarea.big{min-height:220px;line-height:1.6}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .btn{width:100%;background:var(--ac);color:#fff;font-weight:700;padding:13px;border-radius:12px;margin-top:16px}
 .btn.gh{background:var(--card2);color:var(--tx);border:1px solid var(--line)}
@@ -190,9 +191,10 @@ function showModal(){
   const sc=m.querySelector('.sheet'),top=sc?sc.scrollTop:0,same=m.dataset.k===modal.type+':'+modal.id;
   m.innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="sheet">${h}</div></div>`;
   m.dataset.k=modal.type+':'+modal.id;if(same)m.querySelector('.sheet').scrollTop=top;
-  dueLabel();
+  dueLabel();const fd=$('#fd');if(fd)grow(fd);
 }
 function openNew(){modal={type:'new'};showModal();$('#ft').focus()}
+function grow(e){e.style.height='auto';e.style.height=Math.min(e.scrollHeight+2,window.innerHeight*.6)+'px'}
 const WD=['일','월','화','수','목','금','토'];let calYM=null;
 function dueLabel(){const b=$('#dueb');if(!b)return;const v=$('#fdue').value;
   if(v){const d=new Date(v+'T00:00:00');b.innerHTML='📅 '+d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+WD[d.getDay()]+')';b.classList.add('set')}
@@ -215,7 +217,7 @@ function formView(){
   return `<h2>${modal.type==='edit'?'업무 수정':'업무 지시 등록'}<button class="x" onclick="closeModal()">×</button></h2>
   <form onsubmit="saveTask(event)"><label>업무 제목</label><input id="ft" required maxlength="200" value="${esc(t.title)}">
   <label>업무 분류</label><select id="fc" required><option value="" disabled ${t.category?'':'selected'}>분류 선택</option>${CATS.map(k=>`<option ${k===(t.category||'')?'selected':''}>${k}</option>`).join('')}</select>
-  <label>상세 내용</label><textarea id="fd" placeholder="무엇을, 어떻게, 언제까지">${esc(t.detail)}</textarea>
+  <label>상세 내용</label><textarea id="fd" class="big" oninput="grow(this)" placeholder="무엇을, 어떻게, 언제까지">${esc(t.detail)}</textarea>
   <div class="g2"><div><label>담당자</label><select id="fa"><option value="">미지정</option>${staff().map(u=>`<option value="${u.id}" ${u.id===t.assignee_id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
   <div><label>중요도</label><select id="fp">${Object.keys(PR).map(k=>`<option value="${k}" ${k===t.priority?'selected':''}>${PR[k]}</option>`).join('')}</select></div></div>
   <label>기한</label><input id="fdue" type="hidden" value="${esc(t.due)}">
