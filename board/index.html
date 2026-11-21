@@ -74,6 +74,24 @@ textarea.big{min-height:220px;line-height:1.6}
 .calg .tod{border:1px solid var(--ac)}.calg .sel{background:var(--ac);color:#fff;font-weight:700}
 .calf{display:flex;gap:8px;margin-top:8px}.calf button{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);font-size:13px;color:var(--tx)}
 .cat{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;color:#cfd5e1;background:var(--card2);border:1px solid var(--line)}
+.nbar{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:10px}
+.nhead{display:flex;align-items:center;gap:8px}.nhead b{font-size:15px}
+.nbtn{font-size:12px;color:var(--tx);border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:var(--card2)}
+.nnew{font-size:11px;font-weight:700;color:#fff;background:var(--new);border-radius:99px;padding:1px 8px}
+.pin{font-size:11px;font-weight:700;color:var(--hold);border:1px solid var(--hold);border-radius:6px;padding:0 6px;margin-right:6px}
+.notice{border-top:1px solid var(--line);padding:10px 2px 4px;margin-top:8px;cursor:pointer}
+.nbar>.notice:first-of-type{margin-top:10px}
+.notice.unread .ntt{color:#fff}.ntt{font-weight:650;font-size:15px;color:#cfd5e1;word-break:break-word}
+.nbody1{font-size:13px;color:var(--mu);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nempty{font-size:13px;color:var(--mu);margin-top:8px}
+#mod .notice{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-top:8px}
+#mod .notice.unread{border-color:var(--new)}
+.nfull{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;line-height:1.65}
+.nok{margin-top:14px;text-align:center;color:var(--done);font-weight:700;border:1px solid var(--done);border-radius:12px;padding:11px}
+.rlist{display:flex;flex-wrap:wrap;gap:6px}
+.rd{font-size:13px;background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:4px 10px}
+.rd i{font-style:normal;font-size:11px;color:var(--done);margin-left:4px}.rd.no{color:var(--mu)}.rd.no i{color:var(--new)}
+label.ck{display:flex;align-items:center;gap:8px;color:var(--tx);font-size:14px;margin-top:14px}label.ck input{width:18px;height:18px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:99px;font-size:13px;font-weight:600;z-index:20}
 </style>
 </head>
@@ -120,6 +138,10 @@ function render(){
   main.innerHTML=boardView();
   if(modal&&modal.type==='task'&&!busy&&!modal.pick&&!modal.sn&&!modal.nt&&!$('#mod textarea:focus, #mod input:focus')){
     S.tasks.some(t=>t.id===modal.id)?showModal():closeModal();
+  }
+  else if(modal&&(modal.type==='nview'||modal.type==='nlist')){
+    if(modal.type==='nview'&&!(S.notices||[]).some(n=>n.id===modal.id))modal={type:'nlist'};
+    showModal();
   }
 }
 function loginView(){
@@ -169,6 +191,7 @@ function boardView(){
   ${staff().filter(u=>u.id!==S.me.id).map(u=>`<button class="chip ${who===u.id?'on':''}" onclick="setW(${u.id})">${esc(u.name)}</button>`).join('')}</div>
   <div class="filters" style="margin-top:6px"><button class="chip ${cat==='all'?'on':''}" onclick="setC('all')">모든 분류</button>
   ${CATS.map(k=>`<button class="chip ${cat===k?'on':''}" onclick="setC('${k}')">${k} ${T.filter(t=>(t.category||'기타')===k&&!['done','stop'].includes(t.status)).length||''}</button>`).join('')}</div></header>
+  ${noticeStrip()}
   ${list.length?list.map(t=>{const last=t.logs.find(l=>l.kind==='note');const late=t.due&&t.due<td&&!['done','stop'].includes(t.status);
     return `<div class="task" style="--c:var(--${t.status})" onclick="openTask(${t.id})">
     <div class="row"><span class="badge">${ST[t.status]}</span><span class="cat">${esc(t.category||'기타')}</span>${t.priority==='high'?'<span class="tag hot">🔥 긴급</span>':''}
@@ -179,6 +202,71 @@ function boardView(){
     ${last?`<div class="note"><b>특이사항 · ${esc(uname(last.user_id))}:</b> ${esc(last.text)}</div>`:''}</div>`}).join('')
   :'<div class="empty">해당하는 업무가 없습니다</div>'}`;
 }
+const isBoss=()=>S.me.role!=='staff';
+const activeUsers=()=>S.users.filter(u=>u.active);
+const readBy=(n,id)=>n.reads.some(r=>r.user_id===id);
+function noticeStrip(){
+  const N=S.notices||[];
+  const unread=N.filter(n=>!readBy(n,S.me.id));
+  const show=[...N.filter(n=>n.pinned),...unread.filter(n=>!n.pinned)].slice(0,3);
+  if(!N.length&&!isBoss())return'';
+  return `<div class="nbar"><div class="nhead"><b>공지사항</b>${unread.length?`<span class="nnew">새 공지 ${unread.length}</span>`:''}<span class="sp"></span>
+  ${isBoss()?`<button class="nbtn" onclick="openNoticeForm()">＋ 공지 작성</button>`:''}${N.length?`<button class="nbtn" onclick="openNotices()">전체 ${N.length}</button>`:''}</div>
+  ${show.length?show.map(n=>{const me=readBy(n,S.me.id),cntR=activeUsers().filter(u=>readBy(n,u.id)).length;
+    return `<div class="notice ${me?'':'unread'}" onclick="openNotice(${n.id})"><div class="row">${n.pinned?'<span class="pin">고정</span>':''}${me?'':'<span class="nnew">미확인</span>'}
+    <span class="ntt">${esc(n.title)}</span><span class="sp"></span><span class="tag">확인 ${cntR}/${activeUsers().length}</span></div>
+    ${n.body?`<div class="nbody1">${esc(n.body.split('\n')[0])}</div>`:''}</div>`}).join('')
+  :`<div class="nempty">${N.length?'새 공지가 없습니다':'등록된 공지가 없습니다'}</div>`}</div>`;
+}
+function openNotices(){modal={type:'nlist'};showModal()}
+function openNotice(id){modal={type:'nview',id};showModal()}
+function openNoticeForm(id){modal={type:'nform',id:id||null};showModal();$('#nt1').focus()}
+function noticeListView(){
+  const N=S.notices||[];
+  return `<h2>공지사항<button class="x" onclick="closeModal()">×</button></h2>
+  ${isBoss()?`<button class="btn" style="margin-top:0;margin-bottom:6px" onclick="openNoticeForm()">＋ 공지 작성</button>`:''}
+  ${N.length?N.map(n=>{const me=readBy(n,S.me.id);return `<div class="notice ${me?'':'unread'}" onclick="openNotice(${n.id})"><div class="row">${n.pinned?'<span class="pin">고정</span>':''}${me?'':'<span class="nnew">미확인</span>'}
+  <span class="ntt">${esc(n.title)}</span><span class="sp"></span><span class="tag">${fmt(n.created)}</span></div>
+  <div class="tag" style="margin-top:4px">${esc(uname(n.author_id))} · 확인 ${activeUsers().filter(u=>readBy(n,u.id)).length}/${activeUsers().length}</div></div>`}).join('')
+  :'<div class="empty" style="padding:30px 0">등록된 공지가 없습니다</div>'}`;
+}
+function noticeView(){
+  const n=(S.notices||[]).find(x=>x.id===modal.id);if(!n)return'';
+  const me=readBy(n,S.me.id),U=activeUsers(),done=U.filter(u=>readBy(n,u.id)),left=U.filter(u=>!readBy(n,u.id));
+  const when=id=>{const r=n.reads.find(x=>x.user_id===id);return r?fmt(r.created):''};
+  return `<h2>${n.pinned?'<span class="pin">고정</span>':''}공지사항<button class="x" onclick="closeModal()">×</button></h2>
+  <div class="ttl" style="font-size:19px;margin-top:0">${esc(n.title)}</div>
+  <div class="row"><span class="tag">작성 ${esc(uname(n.author_id))}</span><span class="tag">${fmt(n.created)}${n.updated>n.created+1?' · 수정 '+fmt(n.updated):''}</span></div>
+  ${n.body?`<div class="detail nfull">${esc(n.body)}</div>`:''}
+  ${me?`<div class="nok">확인했습니다 · ${when(S.me.id)}</div>`:`<button class="btn" onclick="readNotice(${n.id})">확인했습니다</button>`}
+  <div class="msg" id="nm"></div>
+  <label>확인 현황 ${done.length}/${U.length}</label>
+  <div class="rlist">${done.map(u=>`<span class="rd">${esc(u.name)} <i>${when(u.id)}</i></span>`).join('')}${left.map(u=>`<span class="rd no">${esc(u.name)} <i>미확인</i></span>`).join('')}</div>
+  ${isBoss()?`<div class="g2"><button class="btn gh" onclick="openNoticeForm(${n.id})">수정</button><button class="btn dg" onclick="delNotice(this,${n.id})">삭제</button></div>`:''}`;
+}
+function noticeForm(){
+  const n=modal.id?(S.notices||[]).find(x=>x.id===modal.id)||{}:{};
+  return `<h2>${modal.id?'공지 수정':'공지 작성'}<button class="x" onclick="closeModal()">×</button></h2>
+  <form onsubmit="saveNotice(event)"><label>제목</label><input id="nt1" required maxlength="200" value="${esc(n.title)}">
+  <label>내용</label><textarea id="nb1" class="big" oninput="grow(this)" placeholder="전달할 내용">${esc(n.body)}</textarea>
+  <label class="ck"><input type="checkbox" id="np1" ${n.pinned?'checked':''}> 공지를 보드 맨 위에 고정</label>
+  ${modal.id?`<label class="ck"><input type="checkbox" id="nr1"> 내용이 바뀌었으니 모두 다시 확인 받기</label>`:'<div class="tag" style="margin-top:10px">등록하면 그룹방에도 알림이 갑니다</div>'}
+  <button class="btn">${modal.id?'수정 저장':'공지 올리기'}</button><div class="msg" id="nm"></div></form>`;
+}
+async function saveNotice(e){
+  e.preventDefault();
+  const d={title:$('#nt1').value,body:$('#nb1').value,pinned:$('#np1').checked};
+  if(modal.id)d.reread=!!($('#nr1')&&$('#nr1').checked);
+  try{const edit=!!modal.id,r=await api(edit?'/api/notices/'+modal.id:'/api/notices',d);const id=modal.id||r.id;await load();modal={type:'nview',id};showModal();toast(edit?'수정되었습니다':'공지가 등록되었습니다')}
+  catch(x){$('#nm').textContent=x.message}
+}
+async function readNotice(id){
+  try{await api('/api/notices/'+id+'/read',{});await load();showModal()}catch(x){$('#nm').textContent=x.message}
+}
+async function delNotice(b,id){
+  if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='한 번 더 누르면 삭제';return}
+  try{await api('/api/notices/'+id+'/delete',{});await load();modal={type:'nlist'};showModal();toast('삭제되었습니다')}catch(x){$('#nm').textContent=x.message}
+}
 function setF(f){filter=filter===f&&f!=='open'&&f!=='all'?'open':f;render()}
 function setW(w){who=w;render()}
 function setC(c){cat=c;render()}
@@ -188,10 +276,13 @@ function showModal(){
   if(modal.type==='new'||modal.type==='edit')h=formView();
   else if(modal.type==='task')h=taskView();
   else if(modal.type==='menu')h=menuView();
+  else if(modal.type==='nlist')h=noticeListView();
+  else if(modal.type==='nview')h=noticeView();
+  else if(modal.type==='nform')h=noticeForm();
   const sc=m.querySelector('.sheet'),top=sc?sc.scrollTop:0,same=m.dataset.k===modal.type+':'+modal.id;
   m.innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="sheet">${h}</div></div>`;
   m.dataset.k=modal.type+':'+modal.id;if(same)m.querySelector('.sheet').scrollTop=top;
-  dueLabel();const fd=$('#fd');if(fd)grow(fd);
+  dueLabel();const fd=$('#fd')||$('#nb1');if(fd)grow(fd);
 }
 function openNew(){modal={type:'new'};showModal();$('#ft').focus()}
 function grow(e){e.style.height='auto';e.style.height=Math.min(e.scrollHeight+2,window.innerHeight*.6)+'px'}

@@ -65,6 +65,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL
           REFERENCES tasks(id) ON DELETE CASCADE, user_id INTEGER, kind TEXT, text TEXT, created REAL);
         CREATE TABLE IF NOT EXISTS invites(token TEXT PRIMARY KEY, role TEXT NOT NULL, created REAL, expires REAL);
+        CREATE TABLE IF NOT EXISTS notices(id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT DEFAULT '',
+          author_id INTEGER, pinned INTEGER DEFAULT 0, created REAL, updated REAL);
+        CREATE TABLE IF NOT EXISTS notice_reads(notice_id INTEGER NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL, created REAL, PRIMARY KEY(notice_id, user_id));
         """)
         if "category" not in [r["name"] for r in c.execute("PRAGMA table_info(tasks)")]:
             c.execute("ALTER TABLE tasks ADD COLUMN category TEXT DEFAULT '기타'")
@@ -379,7 +383,14 @@ class H(BaseHTTPRequestHandler):
                     logs.setdefault(r["task_id"], []).append(dict(r))
                 for t in tasks:
                     t["logs"] = logs.get(t["id"], [])
-                out = {"me": {"id": me["id"], "name": me["name"], "role": me["role"]}, "users": users, "tasks": tasks}
+                notices = [dict(r) for r in c.execute("SELECT * FROM notices ORDER BY pinned DESC, created DESC")]
+                reads = {}
+                for r in c.execute("SELECT * FROM notice_reads ORDER BY created"):
+                    reads.setdefault(r["notice_id"], []).append({"user_id": r["user_id"], "created": r["created"]})
+                for n in notices:
+                    n["reads"] = reads.get(n["id"], [])
+                out = {"me": {"id": me["id"], "name": me["name"], "role": me["role"]}, "users": users, "tasks": tasks,
+                       "notices": notices}
                 if me["role"] == "admin":
                     c.execute("DELETE FROM invites WHERE expires<?", (time.time(),))
                     out["invites"] = [dict(r) for r in c.execute("SELECT * FROM invites ORDER BY created")]
@@ -539,6 +550,46 @@ class H(BaseHTTPRequestHandler):
             broadcast()
             return self.send_json({"ok": True})
 
+        if path == "/api/notices":
+            if not boss:
+                return self.err("공지사항은 관리자·팀장만 올릴 수 있습니다", 403)
+            title = str(d.get("title", "")).strip()[:200]
+            if not title:
+                return self.err("공지 제목을 적어 주세요")
+            body = str(d.get("body", ""))[:6000]
+            cur = c.execute("INSERT INTO notices(title,body,author_id,pinned,created,updated) VALUES(?,?,?,?,?,?)",
+                            (title, body, me["id"], 1 if d.get("pinned") else 0, now, now))
+            c.execute("INSERT OR IGNORE INTO notice_reads VALUES(?,?,?)", (cur.lastrowid, me["id"], now))
+            notify("[공지사항] %s\n작성: %s%s\n\n업무 보드에서 내용을 보고 '확인했습니다'를 눌러 주세요." % (
+                title, me["name"], ("\n\n" + body[:800]) if body.strip() else ""))
+            broadcast()
+            return self.send_json({"ok": True, "id": cur.lastrowid})
+        m = re.fullmatch(r"/api/notices/(\d+)(?:/(delete|read))?", path)
+        if m:
+            n = c.execute("SELECT * FROM notices WHERE id=?", (int(m.group(1)),)).fetchone()
+            if not n:
+                return self.err("이미 삭제된 공지입니다", 404)
+            act = m.group(2)
+            if act == "read":
+                c.execute("INSERT OR IGNORE INTO notice_reads VALUES(?,?,?)", (n["id"], me["id"], now))
+            elif not boss:
+                return self.err("관리자·팀장만 할 수 있습니다", 403)
+            elif act == "delete":
+                c.execute("DELETE FROM notices WHERE id=?", (n["id"],))
+            else:
+                title = str(d.get("title", n["title"])).strip()[:200]
+                if not title:
+                    return self.err("공지 제목을 적어 주세요")
+                body = str(d.get("body", n["body"]))[:6000]
+                pinned = 1 if d.get("pinned", n["pinned"]) else 0
+                changed = title != n["title"] or body != n["body"]
+                c.execute("UPDATE notices SET title=?, body=?, pinned=?, updated=? WHERE id=?",
+                          (title, body, pinned, now if changed else n["updated"], n["id"]))
+                if changed and d.get("reread"):
+                    c.execute("DELETE FROM notice_reads WHERE notice_id=? AND user_id<>?", (n["id"], me["id"]))
+                    notify("[공지사항 수정] %s\n수정: %s\n\n내용이 바뀌었습니다. 업무 보드에서 다시 확인해 주세요." % (title, me["name"]))
+            broadcast()
+            return self.send_json({"ok": True})
         if path == "/api/tasks":
             title = str(d.get("title", "")).strip()[:200]
             if not title:
